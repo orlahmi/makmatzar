@@ -1,0 +1,176 @@
+/* variables.css — design tokens */
+:root {
+  /* ===== Sidebar ===== */
+  --color-sidebar-bg: #0f172a;
+  --color-sidebar-text: #94a3b8;
+  --color-sidebar-text-muted: #64748b;
+  --color-sidebar-active-bg: transparent;
+  --color-sidebar-active-text: #3182ce;
+  --color-sidebar-hover-bg: rgba(255,255,255,0.06);
+  --color-sidebar-border: rgba(255,255,255,0.07);
+  --color-sidebar-group-header: #f1f5f9;
+  --color-sidebar-accent: #3182ce;
+
+  /* ===== Topbar (officer-report-form only) ===== */
+  --color-topbar-bg: #1e3a5f;
+  --color-topbar-border: #1e3a5f;
+  --color-topbar-text: #ffffff;
+
+  /* ===== Primary palette ===== */
+  --color-primary: #3182ce;
+  --color-primary-dark: #2b6cb0;
+  --color-primary-light: #4299e1;
+  --color-primary-subtle: #ebf8ff;
+
+  --color-secondary: #38a169;
+  --color-secondary-subtle: #f0fff4;
+
+  /* ===== Semantic ===== */
+  --color-success: #38a169;
+  --color-success-bg: #f0fff4;
+  --color-success-border: #9ae6b4;
+
+  --color-warning: #d69e2e;
+  --color-warning-bg: #fffff0;
+  --color-warning-border: #faf089;
+
+  --color-danger: #e53e3e;
+  --color-danger-bg: #fff5f5;
+  --color-danger-border: #fed7d7;
+
+  --color-info: #3182ce;
+  --color-info-bg: #ebf8ff;
+  --color-info-border: #bee3f8;
+
+  --color-critical: #7f1d1d;
+  --color-critical-bg: #fff5f5;
+
+  /* ===== Operational priority ===== */
+  --op-critical-row:    #fff1f1;
+  --op-critical-border: #fca5a5;
+  --op-attention-row:   #fffbeb;
+  --op-attention-border: #fcd34d;
+  --op-active-row:      #f0f9ff;
+  --op-notice-height:   36px;
+  --op-notice-bg:       #7f1d1d;
+  --op-notice-text:     #ffffff;
+
+  --color-purple: #6d28d9;
+  --color-purple-bg: #ede9fe;
+
+  --color-teal: #0f766e;
+  --color-teal-bg: #ccfbf1;
+
+  /* ===== Neutral palette ===== */
+  --color-page-bg: #f0f4f8;
+  --color-surface: #ffffff;
+  --color-surface-alt: #f7fafc;
+  --color-surface-hover: #edf2f7;
+  --color-surface-raised: #ffffff;
+
+  --color-text-primary: #2d3748;
+  --color-text-secondary: #4a5568;
+  --color-text-muted: #a0aec0;
+  --color-text-disabled: #cbd5e0;
+  --color-text-inverse: #ffffff;
+
+  --color-border: #e2e8f0;
+  --color-border-strong: #cbd5e0;
+  --color-border-focus: #3182ce;
+
+  --color-divider: #edf2f7;
+
+  /* ===== Table ===== */
+  --color-table-header-bg: #1e3a5f;
+  --color-table-header-text: #ffffff;
+
+  /* ===== Status badge tokens ===== */
+  --badge-active: #276749;
+  --badge-active-bg: #f0fff4;
+  --badge-inactive: #4a5568;
+  --badge-inactive-bg: #f7fafc;
+  --badge-pending: #7b341e;
+  --badge-pending-bg: #fffff0;
+  --badge-critical: #c53030;
+  --badge-critical-bg: #fff5f5;
+  --badge-draft: #4a5568;
+  --badge-draft-bg: #f7fafc;
+  --badge-approved: #2b6cb0;
+  --badge-approved-bg: #ebf8ff;
+  --badge-closed: #4a5568;
+  --badge-closed-bg: #f7fafc;
+  --badge-inprogress: #553c9a;
+  --badge-inprogress-bg: #faf5ff;
+
+  /* ===== Typography ===== */
+  --font-family: 'Heebo', 'Segoe UI', system-ui, Arial, 'Noto Sans Hebrew', sans-serif;
+  --font-size-xs:   0.75rem;
+  --font-size-sm:   0.8125rem;
+  --font-size-base: 0.875rem;
+  --font-size-md:   0.9375rem;
+  --font-size-lg:   1rem;
+  --font-size-xl:   1.125rem;
+  --font-size-2xl:  1.25rem;
+  --font-size-3xl:  1.5rem;
+  --font-size-4xl:  1.875rem;
+
+  --font-weight-normal:   400;
+  --font-weight-medium:   500;
+  --font-weight-semibold: 600;
+  --font-weight-bold:     700;
+
+  --line-height-tight:   1.25;
+  --line-height-normal:  1.5;
+  --line-height-relaxed: 1.75;
+
+  /* ===== Spacing ===== */
+  --space-1:  0.25rem;
+  --space-2:  0.5rem;
+  --space-3:  0.75rem;
+  --space-4:  1rem;
+  --space-5:  1.25rem;
+  --space-6:  1.5rem;
+  --space-8:  2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+
+  /* ===== Border radius ===== */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 24px;
+  --radius-full: 9999px;
+
+  /* ===== Shadows ===== */
+  --shadow-xs: 0 1px 3px rgba(0,0,0,0.06);
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.10), 0 2px 6px rgba(0,0,0,0.06);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.06);
+  --shadow-xl: 0 20px 60px rgba(0,0,0,0.15);
+
+  /* ===== Layout ===== */
+  --sidebar-width: 240px;
+  --sidebar-collapsed-width: 240px;
+  --topbar-height: 56px;
+  --content-max-width: 1600px;
+  --nav-item-height: 42px;
+  --table-row-dense: 44px;
+
+  /* ===== Z-index ===== */
+  --z-sidebar: 200;
+  --z-topbar: 190;
+  --z-dropdown: 300;
+  --z-modal: 400;
+  --z-toast: 500;
+  --z-tooltip: 600;
+
+  /* ===== Transitions ===== */
+  --transition-fast: 120ms ease;
+  --transition-base: 200ms ease;
+  --transition-slow: 280ms ease;
+
+  /* ===== Focus ===== */
+  --focus-ring: 0 0 0 3px rgba(49,130,206,0.25);
+}

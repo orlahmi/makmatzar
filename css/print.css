@@ -1,0 +1,113 @@
+/* print.css — print styles */
+
+@media print {
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 11pt;
+    direction: rtl;
+  }
+
+  #sidebar,
+  #topbar,
+  .sidebar-toggle,
+  .filter-panel,
+  .table-toolbar,
+  .pagination-wrap,
+  .bulk-actions-bar,
+  .page-header-actions,
+  .row-actions,
+  .form-actions,
+  .btn:not(.btn-print-show),
+  .modal-backdrop,
+  #toast-container,
+  .hamburger-btn,
+  .mobile-sidebar-overlay,
+  .nav-group-arrow,
+  .tab-btn,
+  .tabs-nav {
+    display: none !important;
+  }
+
+  #main-content {
+    margin-right: 0 !important;
+    margin-top: 0 !important;
+  }
+
+  .page-wrapper { padding: 0; }
+
+  .data-table-wrap { border: 1px solid #ccc; }
+  .data-table th, .data-table td {
+    border: 1px solid #ccc;
+    padding: 4pt 6pt;
+  }
+
+  .data-table thead { background: #f0f0f0 !important; }
+
+  .tab-panel { display: block !important; }
+
+  .accordion-body { display: block !important; }
+
+  .card { box-shadow: none; border: 1px solid #ccc; }
+
+  a { color: black; text-decoration: none; }
+
+  .print-header {
+    display: flex !important;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 2px solid black;
+    padding-bottom: 8pt;
+    margin-bottom: 12pt;
+  }
+
+  .print-system-name {
+    font-size: 14pt;
+    font-weight: bold;
+  }
+
+  .print-doc-number {
+    font-size: 10pt;
+    color: #555;
+  }
+
+  .print-date {
+    font-size: 9pt;
+    color: #555;
+  }
+
+  .print-watermark {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-35deg);
+    font-size: 60pt;
+    color: rgba(0,0,0,0.06);
+    font-weight: bold;
+    pointer-events: none;
+    z-index: 9999;
+    white-space: nowrap;
+  }
+
+  .print-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    border-top: 1px solid #ccc;
+    padding: 4pt;
+    font-size: 8pt;
+    color: #555;
+    text-align: center;
+  }
+
+  .page-break { page-break-after: always; }
+  .no-break { page-break-inside: avoid; }
+
+  @page {
+    margin: 1.5cm;
+    size: A4 portrait;
+  }
+}
