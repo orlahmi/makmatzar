@@ -30,6 +30,14 @@ window.HAMAL_CATEGORIES = [
   { id: 'malfunction', label: 'תקלה' },
 ];
 
+window.INMATE_ACTIVITY_TYPES_LEGACY_LABELS = [
+  'יציאה למרפאה', 'פעילויות חינוך', 'פעילויות עליה', 'יציאה לביד״צ לערעורים', 'ועדה להעברת כלואים', 'דיון בבית דין אזרחי', 'ועדת סמים',
+  'העברה לכלא אזרחי', 'ועדה לעיון בעונש', 'מיוחדים - רפואה', 'ביה״ח 10', 'ועדה רפואית', 'פגישה עם עו״ד בבס״כ', 'ביקורי משפחות',
+  'משיכות חפצים מהקבלה', 'קב״ן', 'רופא', 'רופא שיניים', 'העברות ציוד', 'ביקורי מפקדים', 'אחר', 'יציאה לביד״צ קריה משפטית', 'ווהלים',
+  'פסיכיאטר', 'ביקור עו״ד בקריה המשפטית', 'קרמינולוגית', 'חקירה', 'מיוני מיטב', 'מיוחדים - ניהול', 'פעילות דמ״שים', 'סדנת העצמה',
+  'פרויקטים', 'חר״פ צריפין', 'השכלה - 12 שנו״ל', 'קצינת מבחן', 'יציאה ללשכ״ג', 'פסיכיאטר פרטי', 'פעילות ZOOM', 'הערכת מסוכנות', 'תוכנית יה״ל',
+];
+
 window.INMATE_ACTIVITY_TYPES = [
   { id: 'medical', label: 'רפואה' },
   { id: 'medical_committee', label: 'ועדה רפואית' },
@@ -52,6 +60,11 @@ window.INMATE_ACTIVITY_TYPES = [
   { id: 'education_activity', label: 'פעילות חינוך' },
   { id: 'group_activity', label: 'פעילות קבוצתית' },
 ];
+// merge in the legacy (Alon) activity types that do not exist yet — keeps every existing id intact
+INMATE_ACTIVITY_TYPES_LEGACY_LABELS.forEach(function(label, i) {
+  if (!INMATE_ACTIVITY_TYPES.some(function(t) { return t.label === label; })) INMATE_ACTIVITY_TYPES.push({ id: 'legacy_' + (i + 1), label: label });
+});
+
 
 window.INMATE_ACTIVITY_LOCATIONS = [
   'קלינאים', 'חדר בדיקה', 'בית חולים', 'בית משפט', 'בית משפט צבאי',

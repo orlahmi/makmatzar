@@ -20,6 +20,9 @@ Pages['inmate-activities'] = function(query) {
   const prisonerFiles = Storage.getCollection(Storage.KEYS.PRISONER_FILES);
   const pfMap = Object.fromEntries(prisonerFiles.map(pf => [pf.id, pf]));
 
+  const plannedOf = a => a.time || a.plannedDeparture || '';
+  const typeLabel = a => a.activityTypeLabel || (INMATE_ACTIVITY_TYPES.find(t => t.id === a.activityType) || {}).label || a.activityType || '—';
+
   function getParticipants(a) {
     return a.participants && a.participants.length ? a.participants : (a.prisonerFileId ? [a.prisonerFileId] : []);
   }
@@ -42,7 +45,7 @@ Pages['inmate-activities'] = function(query) {
       .filter(a => a.date === date && !a.deleted)
       .filter(matchesFilters);
     const recurring = getRecurringOccurrences(date).filter(matchesFilters);
-    return oneOff.concat(recurring).sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+    return oneOff.concat(recurring).sort((a, b) => plannedOf(a).localeCompare(plannedOf(b)));
   }
 
   function getMonthActivities(year, month) {
@@ -138,8 +141,9 @@ Pages['inmate-activities'] = function(query) {
         ${Utils.pageHeader('פעילויות', Utils.pageMeta())}
 
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+          <button class="btn btn-secondary btn-sm" id="btn-today">עבור להיום</button>
           <button class="btn btn-secondary btn-sm" id="btn-export">${Utils.icon('download', 14)} ייצוא</button>
-          <button class="btn btn-secondary btn-sm" id="btn-recurring">${Utils.icon('refresh', 14)} פעילויות קבועות</button>
+          <button class="btn btn-secondary btn-sm" id="btn-recurring">${Utils.icon('refresh', 14)} פעילות קבועה</button>
           ${canEdit ? `<button class="btn btn-primary" id="btn-add-act">${Utils.icon('plus', 14)} פעילות חדשה</button>` : ''}
         </div>
 
@@ -194,10 +198,10 @@ Pages['inmate-activities'] = function(query) {
                   return `
                     <div class="agenda-item" style="padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--color-divider)">
                       <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-                        <strong>${Utils.escHtml(a.time || '—')}</strong>
+                        <strong>${Utils.escHtml(plannedOf(a) || '—')}</strong>
                         <span>
                           ${a.isRecurring ? `<span class="badge badge-purple" title="פעילות קבועה">${Utils.icon('refresh', 10)} קבועה</span>` : ''}
-                          <span class="badge badge-info">${Utils.escHtml((INMATE_ACTIVITY_TYPES.find(t => t.id === a.activityType) || {}).label || a.activityType)}</span>
+                          <span class="badge badge-info">${Utils.escHtml(typeLabel(a))}</span>
                         </span>
                       </div>
                       <div style="font-size:var(--font-size-sm)">${Utils.escHtml(participantNames(a))}</div>
@@ -210,32 +214,38 @@ Pages['inmate-activities'] = function(query) {
           </div>
         </div>
 
-        <!-- All activities for selected date -->
-        ${dayActs.length > 0 ? `
-        <div class="card" style="margin-top:var(--space-6)">
-          <div class="card-header"><div class="card-title">פרטי פעילויות — ${Utils.escHtml(selectedLabel)}</div></div>
-          <div class="card-body" style="padding:0">
+        <!-- Daily table — one row per participant (legacy columns) -->
+        <div class="table-panel" style="margin-top:var(--space-6)">
+          <div class="table-panel-header"><span>פעילויות כלואים — ${Utils.escHtml(selectedLabel)}</span><span style="font-size:12px;color:var(--color-text-muted)">${dayActs.length} פעילויות</span></div>
+          <div style="overflow-x:auto">
             <table class="data-table">
-              <thead><tr><th>שעה</th><th>משתתפים</th><th>סוג פעילות</th><th>מיקום</th><th>משגיח</th><th>הערות</th><th></th></tr></thead>
+              <thead><tr><th>מספר אישי</th><th>שם פרטי</th><th>שם משפחה</th><th>מיקום בכלא</th><th>סוג פעילות</th><th>ז. מתוכננת</th><th>ז. בפועל</th><th>ת. חזרה</th><th>ח. בפועל</th><th>פעולות</th></tr></thead>
               <tbody>
-                ${dayActs.map(a => {
-                  return `<tr>
-                    <td><strong>${Utils.escHtml(a.time || '—')}</strong>${a.isRecurring ? ' <span class="badge badge-purple" style="font-size:10px">קבועה</span>' : ''}</td>
-                    <td>${Utils.escHtml(participantNames(a))}</td>
-                    <td>${Utils.escHtml((INMATE_ACTIVITY_TYPES.find(t => t.id === a.activityType) || {}).label || a.activityType)}</td>
-                    <td>${Utils.escHtml(a.location || '—')}</td>
-                    <td>${Utils.escHtml(a.supervisor || '—')}</td>
-                    <td>${Utils.truncate(a.notes || '', 40)}</td>
-                    <td>
-                      ${canEdit && !a.isRecurring ? `<button class="row-action-btn danger" onclick="window.deleteActivity('${a.id}')">${Utils.icon('trash', 12)}</button>` : ''}
-                    </td>
-                  </tr>`;
-                }).join('')}
+                ${dayActs.length === 0 ? '<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--color-text-muted)">אין פעילויות ביום זה</td></tr>' :
+                  dayActs.map(a => {
+                    const parts = getParticipants(a);
+                    const list = parts.length ? parts : [null];
+                    return list.map((pfid, i) => {
+                      const pf = pfid ? pfMap[pfid] : null;
+                      const p = pf ? pMap[pf.personId] : null;
+                      return `<tr>
+                        <td class="td-id">${Utils.escHtml(p ? p.militaryNumber : '—')}</td>
+                        <td>${Utils.escHtml(p ? p.firstName : '—')}</td>
+                        <td>${Utils.escHtml(p ? p.lastName : '—')}</td>
+                        <td>${Utils.escHtml(pf ? (pf.cell || pf.location || '—') : '—')}</td>
+                        <td>${Utils.escHtml(typeLabel(a))}${a.isRecurring ? ' <span class="badge badge-purple" style="font-size:10px">קבועה</span>' : ''}${parts.length > 1 ? ` <span class="badge badge-info" style="font-size:10px">${parts.length} משתתפים</span>` : ''}</td>
+                        <td>${Utils.escHtml(plannedOf(a) || '—')}</td>
+                        <td>${Utils.escHtml(a.actualDeparture || '—')}</td>
+                        <td>${Utils.escHtml(a.plannedReturn || a.returnTime || '—')}</td>
+                        <td>${Utils.escHtml(a.actualReturn || '—')}</td>
+                        <td>${i === 0 && canEdit && !a.isRecurring ? `<button class="row-action-btn" title="עריכה" onclick="window.editActivity('${a.id}')">${Utils.icon('edit', 12)}</button><button class="row-action-btn danger" title="מחיקה" onclick="window.deleteActivity('${a.id}')">${Utils.icon('trash', 12)}</button>` : ''}</td>
+                      </tr>`;
+                    }).join('');
+                  }).join('')}
               </tbody>
             </table>
           </div>
         </div>
-        ` : ''}
 
         ${Utils.classificationFooter()}
       </div>
@@ -256,6 +266,8 @@ Pages['inmate-activities'] = function(query) {
       Utils.el('btn-add-act').onclick = () => showAddActivityModal();
     }
     Utils.el('btn-recurring').onclick = () => showRecurringManagerModal();
+    Utils.el('btn-today').onclick = () => { viewDate = new Date(); selectedDate = today; renderPage(); };
+    window.editActivity = (id) => { const act = Storage.getById(Storage.KEYS.INMATE_ACTIVITIES, id); if (act) showAddActivityModal(act); };
 
     window.deleteActivity = async (id) => {
       const ok = await Modal.confirm({ title: 'מחיקת פעילות', message: 'האם למחוק פעילות זו?', type: 'danger' });
@@ -266,21 +278,24 @@ Pages['inmate-activities'] = function(query) {
     };
   }
 
-  function showAddActivityModal() {
-    const activePrisoners = prisonerFiles.filter(pf => pf.status === 'active');
+  function showAddActivityModal(existing) {
+    const ex = existing || {};
+    const exParts = ex.id ? getParticipants(ex) : [];
+    const activePrisoners = prisonerFiles.filter(pf => pf.status === 'active' || exParts.includes(pf.id));
     Modal.open({
-      title: 'פעילות חדשה',
+      title: ex.id ? 'עריכת פעילות' : 'פעילות חדשה',
       size: 'lg',
       body: `
         <div class="form-row form-row-2">
           <div class="form-group" style="grid-column:1/-1">
-            <label class="form-label">משתתפים <span class="required">*</span></label>
+            <label class="form-label">משתתפים (אפשר לבחור כמה) <span class="required">*</span></label>
+            <input id="act-part-search" class="form-control" placeholder="חיפוש כלוא לפי שם / מ.א..." style="margin-bottom:6px">
             <div id="act-participants-list" style="max-height:160px;overflow-y:auto;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:8px">
               ${activePrisoners.map(pf => {
                 const p = pMap[pf.personId];
                 return `<label style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:13px">
-                  <input type="checkbox" class="act-participant-cb" value="${pf.id}">
-                  ${p ? Utils.escHtml(p.firstName + ' ' + p.lastName + ' — ' + (pf.fileNumber || pf.id)) : (pf.fileNumber || pf.id)}
+                  <input type="checkbox" class="act-participant-cb" value="${pf.id}" ${exParts.includes(pf.id) ? 'checked' : ''}>
+                  <span class="act-part-label">${p ? Utils.escHtml(p.firstName + ' ' + p.lastName + ' — ' + p.militaryNumber) : (pf.fileNumber || pf.id)}</span>
                 </label>`;
               }).join('') || '<div style="color:var(--color-text-muted);font-size:13px">אין כלואים פעילים</div>'}
             </div>
@@ -288,32 +303,35 @@ Pages['inmate-activities'] = function(query) {
           <div class="form-group">
             <label class="form-label">סוג פעילות <span class="required">*</span></label>
             <select id="act-type" class="form-control">
-              ${INMATE_ACTIVITY_TYPES.map(t => `<option value="${t.id}">${Utils.escHtml(t.label)}</option>`).join('')}
+              ${INMATE_ACTIVITY_TYPES.map(t => `<option value="${t.id}" ${ex.activityType === t.id ? 'selected' : ''}>${Utils.escHtml(t.label)}</option>`).join('')}
             </select>
           </div>
           <div class="form-group">
             <label class="form-label">תאריך <span class="required">*</span></label>
-            <input type="date" id="act-date" class="form-control" value="${selectedDate}">
+            <input type="date" id="act-date" class="form-control" value="${ex.date || selectedDate}">
           </div>
           <div class="form-group">
-            <label class="form-label">שעה</label>
-            <input type="time" id="act-time" class="form-control">
+            <label class="form-label">ז. מתוכננת</label>
+            <input type="time" id="act-time" class="form-control" value="${plannedOf(ex)}">
           </div>
+          <div class="form-group"><label class="form-label">ז. בפועל</label><input type="time" id="act-actual-dep" class="form-control" value="${ex.actualDeparture || ''}"></div>
+          <div class="form-group"><label class="form-label">ת. חזרה</label><input type="time" id="act-planned-ret" class="form-control" value="${ex.plannedReturn || ''}"></div>
+          <div class="form-group"><label class="form-label">ח. בפועל</label><input type="time" id="act-actual-ret" class="form-control" value="${ex.actualReturn || ''}"></div>
           <div class="form-group">
             <label class="form-label">מיקום</label>
             <select id="act-location" class="form-control">
               <option value="">בחר מיקום</option>
-              ${INMATE_ACTIVITY_LOCATIONS.map(l => `<option value="${l.id || l}">${Utils.escHtml(l.label || l)}</option>`).join('')}
+              ${INMATE_ACTIVITY_LOCATIONS.map(l => `<option value="${l.id || l}" ${ex.location === (l.id || l) ? 'selected' : ''}>${Utils.escHtml(l.label || l)}</option>`).join('')}
             </select>
           </div>
           <div class="form-group">
             <label class="form-label">משגיח</label>
-            <input id="act-supervisor" class="form-control">
+            <input id="act-supervisor" class="form-control" value="${Utils.escHtml(ex.supervisor || ex.escortName || '')}">
           </div>
         </div>
         <div class="form-group">
           <label class="form-label">הערות</label>
-          <textarea id="act-notes" class="form-control" rows="2"></textarea>
+          <textarea id="act-notes" class="form-control" rows="2">${Utils.escHtml(ex.notes || '')}</textarea>
         </div>
       `,
       footer: `
@@ -322,29 +340,42 @@ Pages['inmate-activities'] = function(query) {
       `,
     });
 
+    Utils.el('act-part-search').oninput = () => {
+      const q = Utils.el('act-part-search').value.trim();
+      document.querySelectorAll('#act-participants-list label').forEach(l => { l.style.display = !q || l.textContent.includes(q) ? '' : 'none'; });
+    };
+
     window._saveActivity = () => {
       const participants = Array.from(document.querySelectorAll('.act-participant-cb:checked')).map(cb => cb.value);
       const date = Utils.el('act-date').value;
       const activityType = Utils.el('act-type').value;
       if (!participants.length) { Toast.error('יש לבחור לפחות משתתף אחד'); return; }
       if (!date) { Toast.error('יש לבחור תאריך'); return; }
+      if (!Utils.el('act-time').value) { Toast.error('יש להזין זמן מתוכנן'); return; }
 
-      const act = {
-        id: 'ia_' + Utils.generateId(),
+      // ONE activity record with a participants list (never one record per participant)
+      const act = Object.assign({}, ex, {
+        id: ex.id || 'ia_' + Utils.generateId(),
         participants,
+        prisonerFileId: participants[0],
         activityType,
+        activityTypeLabel: (INMATE_ACTIVITY_TYPES.find(t => t.id === activityType) || {}).label,
         date,
-        time: Utils.el('act-time').value || '',
+        time: Utils.el('act-time').value,
+        plannedDeparture: Utils.el('act-time').value,
+        actualDeparture: Utils.el('act-actual-dep').value || null,
+        plannedReturn: Utils.el('act-planned-ret').value || null,
+        actualReturn: Utils.el('act-actual-ret').value || null,
         location: Utils.el('act-location').value || '',
         supervisor: Utils.el('act-supervisor').value || '',
         notes: Utils.el('act-notes').value || '',
-        createdAt: new Date().toISOString(),
+        createdAt: ex.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-      };
+      });
       Storage.upsert(Storage.KEYS.INMATE_ACTIVITIES, act);
-      Audit.log({ module: 'incarceration', action: 'create', entityType: 'inmateActivity', entityId: act.id, description: `פעילות כלוא: ${activityType} (${date}) — ${participants.length} משתתפים` });
+      Audit.log({ module: 'incarceration', action: ex.id ? 'update' : 'create', entityType: 'inmateActivity', entityId: act.id, description: `פעילות כלוא: ${activityType} (${date}) — ${participants.length} משתתפים` });
       Modal.close();
-      Toast.success('הפעילות נוספה');
+      Toast.success(ex.id ? 'הפעילות עודכנה' : 'הפעילות נוספה');
       selectedDate = date;
       renderPage();
     };
