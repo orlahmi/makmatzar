@@ -41,6 +41,7 @@ window.OFFENSE_CODE_MAP = Object.fromEntries(OFFENSES.map(o => [o.code, o]));
 
 window.REPORT_TYPES = [
   { id: 'dmash', label: 'דמ״ש', description: 'דו״ח מיוחד שוטר' },
+  { id: 'bidatz', label: 'ביד״צ', description: 'דו״ח מפורט כולל עבירות מהירות ואמצעים טכנולוגיים' },
 ];
 
 window.REPORT_STATUSES = [
@@ -97,3 +98,5 @@ window.TASK_TYPES = [
   { id: 'operational', label: 'מבצעי' },
 ];
 window.TASK_TYPE_MAP = Object.fromEntries(TASK_TYPES.map(t => [t.id, t]));
+
+window.REPORT_TYPE_LABEL = Object.fromEntries(REPORT_TYPES.map(t => [t.id, t.label]));

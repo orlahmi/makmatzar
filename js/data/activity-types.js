@@ -84,6 +84,7 @@ window.CANTEEN_PRODUCT_CATEGORIES = [
 
 window.DELIVERY_METHODS = [
   { id: 'hand', label: 'מסירה ידנית' },
+  { id: 'locate', label: 'דו״ח איתור' },
   { id: 'mail', label: 'דואר' },
   { id: 'fax', label: 'פקס' },
   { id: 'email', label: 'דואר אלקטרוני' },

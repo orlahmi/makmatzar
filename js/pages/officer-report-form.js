@@ -19,6 +19,8 @@ Pages['officer-report-form'] = function(query) {
   const offense = OFFENSE_MAP ? OFFENSE_MAP[report.offenseId] : null;
   const base = BASE_MAP ? BASE_MAP[report.baseId] : null;
 
+  const td = report.typeData || {};
+  const yesNo = v => v === 'yes' ? 'כן' : v === 'no' ? 'לא' : '—';
   function esc(v) { return Utils.escHtml(v || '—'); }
   function fdate(v) { return v ? Utils.formatDate(v) : '—'; }
 
@@ -31,7 +33,7 @@ Pages['officer-report-form'] = function(query) {
     <div class="page-wrapper">
       <div class="page-header">
         <div class="page-header-left">
-          <h1 class="page-title">${Utils.icon('report', 22)} דו"ח שוטר — ${esc(report.reportNumber)}</h1>
+          <h1 class="page-title">${Utils.icon('report', 22)} דו"ח ${esc(REPORT_TYPE_LABEL[report.reportType] || 'דמ״ש')} — ${esc(report.reportNumber)}</h1>
           <p class="page-subtitle">
             ${StatusBadge.render(report.status)}
             &nbsp;
@@ -134,7 +136,8 @@ Pages['officer-report-form'] = function(query) {
     </div>
   `;
 
-  // Init tabs
+  // Init tabs (ביד״צ-only professional tabs are hidden for דמ״ש)
+  const BIDATZ_ONLY_TABS = ['signal-report', 'speed', 'checks', 'reliability'];
   Tabs.create({
     containerId: 'report-tabs',
     defaultTab: 'general',
@@ -159,7 +162,7 @@ Pages['officer-report-form'] = function(query) {
       { id: 'summons', label: 'זימונים' },
       { id: 'files', label: 'קבצים' },
       { id: 'verdict', label: 'תוצאות שיפוט' },
-    ]
+    ].filter(t => report.reportType === 'bidatz' || !BIDATZ_ONLY_TABS.includes(t.id))
   });
 
   // Global actions
@@ -195,7 +198,7 @@ Pages['officer-report-form'] = function(query) {
           <div class="card-body">
             <div class="info-list">
               ${infoRow('מספר דו"ח', esc(report.reportNumber))}
-              ${infoRow('סוג דו"ח', esc(report.reportType))}
+              ${infoRow('סוג דו"ח', esc(REPORT_TYPE_LABEL[report.reportType] || 'דמ״ש'))}
               ${infoRow('תאריך', fdate(report.date))}
               ${infoRow('שעה', esc(report.time))}
               ${infoRow('בסיס', base ? esc(base.name) : '—')}
@@ -338,12 +341,15 @@ Pages['officer-report-form'] = function(query) {
           <div class="card-header"><div class="card-title">רכב</div></div>
           <div class="card-body">
             <div class="info-list">
-              ${infoRow('לוחית רישוי', v.plate || '—')}
+              ${infoRow('מספר רישוי אזרחי', v.lv_civilPlate || v.plate || '—')}
+              ${infoRow('מספר רישוי צבאי', v.lv_militaryPlate || '—')}
+              ${infoRow('סוג רישיון / מספר', ((v.lv_licenseType || '—') + ' / ' + (v.lv_licenseNumber || '—')))}
+              ${infoRow('תוקף רישיון', v.lv_licenseExpiry ? fdate(v.lv_licenseExpiry) : '—')}
               ${infoRow('יצרן', v.make || '—')}
               ${infoRow('דגם', v.model || '—')}
               ${infoRow('שנת ייצור', v.year || '—')}
-              ${infoRow('צבע', v.color || '—')}
-              ${infoRow('סוג רכב', v.type || '—')}
+              ${infoRow('צבע', v.lv_vehicleColor || v.color || '—')}
+              ${infoRow('סוג רכב', v.lv_vehicleType || v.type || '—')}
             </div>
           </div>
         </div>
@@ -370,14 +376,16 @@ Pages['officer-report-form'] = function(query) {
         <div class="card-body">
           ${witnesses.length === 0 ? `<div class="empty-state-desc">לא נוספו עדים לדו"ח זה.</div>` : `
             <table class="data-table">
-              <thead><tr><th>#</th><th>מ"א</th><th>שם</th><th>טלפון</th><th>תפקיד</th></tr></thead>
+              <thead><tr><th>#</th><th>מ"א</th><th>ת"ז</th><th>שם</th><th>סוג מעורבות</th><th>יחידה</th><th>בסיס שיטור</th></tr></thead>
               <tbody>
                 ${witnesses.map((w, i) => `<tr>
                   <td>${i + 1}</td>
                   <td>${esc(w.militaryNumber)}</td>
-                  <td>${esc(w.name)}</td>
-                  <td>${esc(w.phone)}</td>
-                  <td>${esc(w.role)}</td>
+                  <td>${esc(w.nationalId)}</td>
+                  <td>${esc(w.name || ((w.firstName || '') + ' ' + (w.lastName || '')).trim())}</td>
+                  <td>${esc(w.involvement || w.role)}</td>
+                  <td>${esc(w.unit)}</td>
+                  <td>${esc(w.policeBase)}</td>
                 </tr>`).join('')}
               </tbody>
             </table>
@@ -438,13 +446,11 @@ Pages['officer-report-form'] = function(query) {
         <div class="card-header"><div class="card-title">דו"ח איתור</div></div>
         <div class="card-body">
           <div class="info-list">
-            ${infoRow('תאריך איתור', fdate(report.locationReportDate))}
-            ${infoRow('שעת איתור', esc(report.locationReportTime))}
-            ${infoRow('יחידת איתור', esc(report.locationReportUnit))}
-            ${infoRow('קצין מאשר', esc(report.locationReportOfficer))}
-            ${infoRow('הערות', esc(report.locationReportNotes))}
+            ${infoRow('מ"א מזהה עבירה', esc((report.delivery || {}).locatorMilNum))}
+            ${infoRow('שם מזהה עבירה', esc(((report.delivery || {}).locatorFirstName || '') + ' ' + ((report.delivery || {}).locatorLastName || '')))}
+            ${infoRow('סיבת דו"ח איתור', esc((report.delivery || {}).locateReason))}
           </div>
-          ${!report.locationReportDate ? '<div class="empty-state-desc" style="margin-top:12px">לא הוזן דו"ח איתור עדיין.</div>' : ''}
+          ${report.deliveryMethod !== 'locate' ? '<div class="empty-state-desc" style="margin-top:12px">הדו"ח לא נמסר כדו"ח איתור.</div>' : ''}
         </div>
       </div>
     `;
@@ -456,31 +462,35 @@ Pages['officer-report-form'] = function(query) {
         <div class="card-header"><div class="card-title">דו"ח אתת</div></div>
         <div class="card-body">
           <div class="info-list">
-            ${infoRow('תאריך', fdate(report.signalReportDate))}
-            ${infoRow('שעה', esc(report.signalReportTime))}
-            ${infoRow('ערוץ', esc(report.signalReportChannel))}
-            ${infoRow('תוצאה', esc(report.signalReportResult))}
+            ${infoRow('ל"ז מלאה', esc(td.at_fullTime))}
+            ${infoRow('ספרות אמצעיות', esc(td.at_middleDigits))}
+            ${infoRow('מרחק בין תחנה א׳ לתחנה ב׳', esc(td.at_stationDistance))}
+            ${infoRow('סוג / צבע רכב (תחנה א׳)', esc((td.at_vehicleType || '') + ' ' + (td.at_vehicleColor || '')))}
+            ${infoRow('אחר', esc(td.at_other))}
+            ${infoRow('זיהה את העבירה בעצמו', yesNo(td.at_selfIdentified))}
+            ${infoRow('פירוט עצירת הרכב', esc(td.at_stopDetails))}
+            ${infoRow('אתת', esc((td.at_rank || '') + ' ' + (td.at_firstName || '') + ' ' + (td.at_lastName || '') + ' (' + (td.at_milNum || '—') + ')'))}
           </div>
-          ${!report.signalReportDate ? '<div class="empty-state-desc" style="margin-top:12px">לא הוזן דו"ח אתת עדיין.</div>' : ''}
         </div>
       </div>
     `;
   }
 
   function renderTabSpeed() {
-    const sp = report.speedData || {};
     return `
       <div class="card">
-        <div class="card-header"><div class="card-title">מהירות וטכנולוגיה</div></div>
+        <div class="card-header"><div class="card-title">עבירות מהירות ואמצעים טכנולוגיים</div></div>
         <div class="card-body">
           <div class="info-list">
-            ${infoRow('מד מהירות בשימוש', sp.deviceType || '—')}
-            ${infoRow('מספר סידורי', sp.deviceSerial || '—')}
-            ${infoRow('מהירות מדודה (קמ"ש)', sp.measuredSpeed || '—')}
-            ${infoRow('מהירות מותרת (קמ"ש)', sp.allowedSpeed || '—')}
-            ${infoRow('טווח מדידה', sp.range || '—')}
-            ${infoRow('תאריך כיול', fdate(sp.calibrationDate))}
-            ${infoRow('כיול תקין', sp.calibrationOk ? 'כן' : 'לא')}
+            ${infoRow('מהירות שנמדדה במכשיר', esc(td.sp_measured))}
+            ${infoRow('מהירות אחרי הפחתה', esc(td.sp_afterReduction))}
+            ${infoRow('מרחק שנמדד במכשיר', esc(td.sp_distance))}
+            ${infoRow('מהירות מותרת בכביש', esc(td.sp_allowedRoad))}
+            ${infoRow('מהירות מותרת ע"פ רישיון רכב', esc(td.sp_allowedLicense))}
+            ${infoRow('סוג הדרך', esc(td.sp_roadType))}
+            ${infoRow('מספר מכשיר', esc(td.sp_deviceNumber))}
+            ${infoRow('מספר מצלמה', esc(td.sp_cameraNumber))}
+            ${infoRow('סוג מכשיר', esc(td.sp_deviceType))}
           </div>
         </div>
       </div>
@@ -488,49 +498,45 @@ Pages['officer-report-form'] = function(query) {
   }
 
   function renderTabChecks() {
-    const checks = report.checks || {};
-    const items = [
-      ['מד מהירות', 'speedometer'],
-      ['מראות', 'mirrors'],
-      ['בלמים', 'brakes'],
-      ['אורות', 'lights'],
-      ['צמיגים', 'tires'],
-      ['חגורות בטיחות', 'seatbelts'],
-      ['חפצה', 'seatbelt_front'],
-      ['טכוגרף', 'tachograph'],
-      ['גז', 'gas'],
-    ];
+    const items = [['בדיקה עצמית', 'ck_self'], ['בדיקת תצוגה', 'ck_display'], ['בדיקת תיאום על', 'ck_coordination'], ['בדיקת כיול מהירות+מרחק', 'ck_calibration']];
     return `
       <div class="card">
         <div class="card-header"><div class="card-title">בדיקות תקינות</div></div>
         <div class="card-body">
           <table class="data-table">
-            <thead><tr><th>בדיקה</th><th>תקין</th><th>הערה</th></tr></thead>
+            <thead><tr><th>בדיקה</th><th>בוצעה</th></tr></thead>
             <tbody>
-              ${items.map(([label, key]) => `<tr>
-                <td>${Utils.escHtml(label)}</td>
-                <td>${checks[key] === true ? '<span class="badge badge-success">תקין</span>' : checks[key] === false ? '<span class="badge badge-danger">לא תקין</span>' : '<span class="badge badge-draft">לא נבדק</span>'}</td>
-                <td>${esc(checks[key + '_note'])}</td>
-              </tr>`).join('')}
+              ${items.map(([label, key]) => `<tr><td>${Utils.escHtml(label)}</td><td>${td[key] === 'yes' ? '<span class="badge badge-success">בוצעה</span>' : '<span class="badge badge-draft">לא בוצעה</span>'}</td></tr>`).join('')}
             </tbody>
           </table>
+          <div class="info-list" style="margin-top:12px">
+            ${infoRow('בדיקות בתחילת משמרת', esc((td.ck_startTime || '') + ' ' + (td.ck_startPlace || '')))}
+            ${infoRow('בדיקות בסוף משמרת', esc((td.ck_endTime || '') + ' ' + (td.ck_endPlace || '')))}
+            ${infoRow('מפעיל', esc((td.ck_operatorFirst || '') + ' ' + (td.ck_operatorLast || '') + ' (' + (td.ck_operatorMilNum || '—') + ')'))}
+          </div>
         </div>
       </div>
     `;
   }
 
   function renderTabReliability() {
+    const items = [
+      ['rl_urban424', 'אכיפה בדרך עירונית: תמרור 424'], ['rl_lineOfSight', 'קו ראיה נקי מהפרעות'], ['rl_notHidden', 'רכב המטרה לא היה מוסתר'],
+      ['rl_redPoint', 'נקודת הצבעה אדומה על מרכז רכב המטרה'], ['rl_sign426Start', 'תמרור 426 נבדק בתחילת משמרת'], ['rl_sign426End', 'תמרור 426 נבדק בסיום משמרת'],
+      ['rl_weather', 'ללא גשם, שלג, ברד או חושך'], ['rl_shownToDriver', 'נתוני המדידה הוצגו בפני הנהג'], ['rl_driverRefused', 'הנהג סירב לראות את נתוני המדידה'],
+    ];
     return `
       <div class="card">
         <div class="card-header"><div class="card-title">אמינות הפעלה</div></div>
         <div class="card-body">
           <div class="info-list">
-            ${infoRow('ציון אמינות', esc(report.reliabilityScore))}
-            ${infoRow('הערות אמינות', esc(report.reliabilityNotes))}
-            ${infoRow('בדקות ע"י', esc(report.reliabilityCheckedBy))}
-            ${infoRow('תאריך בדיקה', fdate(report.reliabilityCheckDate))}
+            ${items.map(([k, l]) => infoRow(l, td[k] === 'yes' ? 'כן' : 'לא')).join('')}
+            ${infoRow('נתיב / מתוך נתיבים', esc((td.rl_lane || '—') + ' / ' + (td.rl_lanesTotal || '—')))}
+            ${infoRow('תנועה', esc(td.rl_approach))}
+            ${infoRow('טווח גילוי (מטר)', esc(td.rl_detectionRange))}
+            ${infoRow('מרחק מפעיל מהתמרור (מטר)', esc(td.rl_operatorDistance))}
+            ${infoRow('מפעיל', esc((td.rl_operatorName || '') + ' ' + (td.rl_operatorMilNum || '')))}
           </div>
-          ${!report.reliabilityScore ? '<div class="empty-state-desc" style="margin-top:12px">לא הוזן ציון אמינות עדיין.</div>' : ''}
         </div>
       </div>
     `;
