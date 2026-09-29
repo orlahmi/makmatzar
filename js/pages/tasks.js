@@ -10,6 +10,7 @@ Pages['tasks'] = function(query) {
   let filterStatus = '';
   let filterPriority = '';
   let filterType = '';
+  let filterCategory = '';
   let filterSearch = '';
   let tableInstance = null;
 
@@ -17,6 +18,7 @@ Pages['tasks'] = function(query) {
     let tasks = Storage.getCollection(Storage.KEYS.TASKS);
     if (filterStatus) tasks = tasks.filter(t => t.status === filterStatus);
     if (filterPriority) tasks = tasks.filter(t => t.priority === filterPriority);
+    if (filterCategory) tasks = tasks.filter(t => t.taskCategory === filterCategory);
     if (filterType) tasks = tasks.filter(t => t.taskType === filterType);
     if (filterSearch) {
       const q = filterSearch.toLowerCase();
@@ -58,8 +60,16 @@ Pages['tasks'] = function(query) {
             </div>
             <div class="form-group">
               <label class="form-label">סוג</label>
+              <select class="form-control" id="f-category">
+                <option value="">הכל</option>
+                <option value="operational" ${filterCategory === 'operational' ? 'selected' : ''}>מבצעי</option>
+                <option value="administrative" ${filterCategory === 'administrative' ? 'selected' : ''}>מנהלתי</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">תת-סוג</label>
               <select class="form-control" id="f-type">
-                <option value="">כל הסוגים</option>
+                <option value="">כל התת-סוגים</option>
                 ${TASK_TYPES.map(t => `<option value="${t.id}" ${filterType === t.id ? 'selected' : ''}>${Utils.escHtml(t.label)}</option>`).join('')}
               </select>
             </div>
@@ -91,7 +101,8 @@ Pages['tasks'] = function(query) {
         { key: 'taskNumber', label: 'מספר משימה', tdClass: 'td-number' },
         { key: 'name', label: 'שם המשימה' },
         { key: 'priority', label: 'עדיפות', render: v => StatusBadge.renderPriority(v) },
-        { key: 'taskType', label: 'סוג', render: v => (TASK_TYPE_MAP[v] ? Utils.escHtml(TASK_TYPE_MAP[v].label) : '—') },
+        { key: 'taskCategory', label: 'סוג', render: v => v === 'operational' ? '<span class="badge badge-danger">מבצעי</span>' : v === 'administrative' ? '<span class="badge badge-info">מנהלתי</span>' : '<span class="badge badge-draft">לא סווג</span>' },
+        { key: 'taskType', label: 'תת-סוג', render: v => (TASK_TYPE_MAP[v] ? Utils.escHtml(TASK_TYPE_MAP[v].label) : '—') },
         { key: 'date', label: 'תאריך', render: v => Utils.formatDate(v) },
         { key: 'time', label: 'שעה', render: v => v || '—' },
         { key: 'status', label: 'סטטוס', render: v => StatusBadge.render(v) },
@@ -118,6 +129,11 @@ Pages['tasks'] = function(query) {
 
     Utils.el('f-priority').addEventListener('change', () => {
       filterPriority = Utils.el('f-priority').value;
+      tableInstance.update(getData());
+    });
+
+    Utils.el('f-category').addEventListener('change', () => {
+      filterCategory = Utils.el('f-category').value;
       tableInstance.update(getData());
     });
 

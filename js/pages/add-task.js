@@ -13,6 +13,9 @@ Pages['add-task'] = function(query) {
 
   const taskNum = 'TSK-' + String(Math.floor(Math.random() * 9000) + 1000);
   const people = Storage.getCollection(Storage.KEYS.PEOPLE);
+  // commander is chosen from people assigned to the current base (not system users)
+  const curBase = AppState.get('currentBase');
+  const basePeople = curBase ? people.filter(p => p.baseId === curBase.id) : people;
 
   content.innerHTML = `
     <div class="page-wrapper">
@@ -26,6 +29,20 @@ Pages['add-task'] = function(query) {
 
       <form id="task-form">
         <div class="page-section">
+          <div class="section-header"><div class="section-title">סוג משימה</div></div>
+          <div class="form-row form-row-3">
+            <div class="form-group">
+              <label class="form-label">סוג משימה <span class="required">*</span></label>
+              <select name="taskCategory" id="task-category" class="form-control" required>
+                <option value="">בחר סוג משימה</option>
+                <option value="operational">מבצעי</option>
+                <option value="administrative">מנהלתי</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="page-section" id="task-details-section">
           <div class="section-header"><div class="section-title">פרטי המשימה</div></div>
           <div class="form-row form-row-3">
             <div class="form-group" style="grid-column:1/3">
@@ -39,7 +56,7 @@ Pages['add-task'] = function(query) {
               </select>
             </div>
             <div class="form-group">
-              <label class="form-label">סוג <span class="required">*</span></label>
+              <label class="form-label">תת-סוג <span class="required">*</span></label>
               <select name="taskType" class="form-control" required>
                 <option value="">בחר סוג</option>
                 ${TASK_TYPES.map(t => `<option value="${t.id}">${Utils.escHtml(t.label)}</option>`).join('')}
@@ -66,10 +83,10 @@ Pages['add-task'] = function(query) {
               </select>
             </div>
             <div class="form-group">
-              <label class="form-label">מפקד</label>
+              <label class="form-label">מפקד <span class="required">*</span></label>
               <select name="commander" class="form-control">
                 <option value="">בחר מפקד</option>
-                ${people.map(p => `<option value="${p.id}">${Utils.escHtml(p.firstName + ' ' + p.lastName + ' — ' + p.militaryNumber)}</option>`).join('')}
+                ${basePeople.map(p => `<option value="${p.id}">${Utils.escHtml(p.firstName + ' ' + p.lastName + ' — ' + p.militaryNumber)}</option>`).join('')}
               </select>
             </div>
             <div class="form-group" style="grid-column:1/-1">
@@ -192,6 +209,14 @@ Pages['add-task'] = function(query) {
       showFieldError('name', 'שדה חובה — יש להזין שם משימה');
       firstInvalid = firstInvalid || document.querySelector('[name="name"]');
     }
+    if (!data.taskCategory) {
+      showFieldError('taskCategory', 'שדה חובה — יש לבחור מבצעי או מנהלתי');
+      firstInvalid = firstInvalid || document.querySelector('[name="taskCategory"]');
+    }
+    if (!data.commander) {
+      showFieldError('commander', 'שדה חובה — יש לבחור מפקד מתוך אנשי הבסיס');
+      firstInvalid = firstInvalid || document.querySelector('[name="commander"]');
+    }
     if (!data.taskType) {
       showFieldError('taskType', 'שדה חובה — יש לבחור סוג משימה');
       firstInvalid = firstInvalid || document.querySelector('[name="taskType"]');
@@ -204,9 +229,9 @@ Pages['add-task'] = function(query) {
       showFieldError('description', 'שדה חובה — יש להזין תיאור');
       firstInvalid = firstInvalid || document.querySelector('[name="description"]');
     }
-    const missingEquipId = equipment.some(e => e.type && !e.equipmentId);
+    const missingEquipId = equipment.some(e => !e.type || !String(e.equipmentId || '').trim());
     if (missingEquipId) {
-      Toast.error('יש להזין מזהה ציוד לכל פריט ציוד שנוסף');
+      Toast.error('יש לבחור ציוד ולהזין מזהה ציוד לכל שורה');
       firstInvalid = firstInvalid || document.querySelector('.equip-id');
     }
     if (firstInvalid) { firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' }); firstInvalid.focus(); return; }
@@ -220,6 +245,7 @@ Pages['add-task'] = function(query) {
       description: data.description || '',
       notes: data.notes || '',
       priority: data.priority || 'medium',
+      taskCategory: data.taskCategory,
       taskType: data.taskType,
       date: data.date,
       time: data.time || '',
@@ -228,7 +254,7 @@ Pages['add-task'] = function(query) {
       commander: data.commander || '',
       commanderName: commanderPerson ? (commanderPerson.firstName + ' ' + commanderPerson.lastName) : '',
       participants: participants.filter(p => p.personId).map(p => p.personId),
-      equipment: equipment.filter(e => e.type).map(e => ({ type: e.type, label: (EQUIPMENT_TYPES.find(t => t.id === e.type) || {}).label || e.type, quantity: e.quantity, id: e.equipmentId })),
+      equipment: equipment.map(e => ({ type: e.type, label: (EQUIPMENT_TYPES.find(t => t.id === e.type) || {}).label || e.type, quantity: e.quantity, id: String(e.equipmentId).trim(), equipmentId: String(e.equipmentId).trim() })),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };

@@ -85,7 +85,7 @@ Pages['task-dashboard'] = function(query) {
           '</button>' +
           '<h1 style="font-size:22px;font-weight:700;margin:0 0 6px 0">' + Utils.escHtml(task.name) + '</h1>' +
           '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px">' +
-            StatusBadge.render(task.status) + ' ' + StatusBadge.renderPriority(task.priority) +
+            StatusBadge.render(task.status) + ' ' + StatusBadge.renderPriority(task.priority) + ' ' + (task.taskCategory === 'operational' ? '<span class="badge badge-danger">מבצעי</span>' : task.taskCategory === 'administrative' ? '<span class="badge badge-info">מנהלתי</span>' : '') +
             '<span style="color:var(--color-text-muted)">דף ניהול וריכוז נתונים למשימה מס׳ ' + Utils.escHtml(task.taskNumber || taskId) + '</span>' +
             (Permissions.can('createTask')
               ? '<button type="button" class="btn btn-secondary btn-sm" id="td-edit-btn" style="margin-right:auto">' +
