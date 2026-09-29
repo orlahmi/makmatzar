@@ -438,7 +438,7 @@ Pages['officer-report-form'] = function(query) {
             ${offense ? infoRow('קוד עבירה', esc(offense.code)) : ''}
             ${offense ? infoRow('שם עבירה', esc(offense.title)) : ''}
             ${offense ? infoRow('קטגוריה', esc(offense.category)) : ''}
-            ${infoRow('חומרה', esc(report.severity))}
+            ${infoRow('חומרה', esc(({ low: 'קלה', medium: 'בינונית', high: 'חמורה', critical: 'קריטית' })[report.severity] || report.severity))}
             ${infoRow('נקודות', String(report.points || 0))}
             ${infoRow('קנס (₪)', report.fine ? Utils.formatCurrency(report.fine) : '0')}
             ${infoRow('מסגרת אכיפה', esc(report.enforcementFramework))}

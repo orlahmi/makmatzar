@@ -1180,7 +1180,7 @@ Pages['mashlat'] = function(query) {
         Audit.log({ module: 'mashlat', action: 'update_status', entityType: 'coordination', entityId: coordId,
           description: 'תיאום ' + coord.coordinationNumber + ' קושר לתיק כלוא פעיל קיים ' + (existingFile.fileNumber || existingFile.id) });
         Modal.close();
-        Toast.info('לחייל כבר קיים תיק כלוא פעיל (' + (existingFile.fileNumber || '') + ') — התיאום קושר אליו ולא נפתח תיק נוסף');
+        Toast.info('לחייל כבר קיים תיק כלוא פעיל (' + (existingFile.fileNumber || existingFile.id) + ') — התיאום קושר אליו ולא נפתח תיק נוסף');
         Router.navigate('/prisoner-file', { id: existingFile.id });
         return;
       }
