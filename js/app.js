@@ -25,6 +25,7 @@
       DataSeed.seed();
     }
 
+    if (window.Migrations) Migrations.runAll();
     Notifications.load();
 
     Router.registerAll({
