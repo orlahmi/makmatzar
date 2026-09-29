@@ -20,25 +20,35 @@ Pages['counting-report'] = function(query) {
   const pMap         = Object.fromEntries(people.map(p => [p.id, p]));
 
   const SHIFTS = [
-    { id: 'aleph',   label: 'א' },
+    { id: 'aleph',   label: 'ג' },
     { id: 'noon',    label: 'צ' },
     { id: 'evening', label: 'ש' },
     { id: 'night',   label: 'ל' },
   ];
 
-  // Derive filter options from live data, plus the fixed additional company categories
+  // Company options: canonical list only (no raw values from data, no duplicates, no dead options).
+  // Raw prisoner values are normalised (trim / geresh variants) before matching.
   const EXTRA_COMPANIES = ['פלוגת נשים', 'אגף'];
-  const companies = [...new Set([...allPrisoners.map(pf => pf.company).filter(Boolean), ...EXTRA_COMPANIES])].sort();
+  const canon = v => String(v || '').trim().replace(/[׳'`´]/g, '׳').replace(/\s+/g, ' ');
+  const COMPANY_OPTIONS = [...new Set([...DETENTION_COMPANIES.map(canon), ...EXTRA_COMPANIES])];
+  const companyOf = pf => { const c = canon(pf.company); return COMPANY_OPTIONS.includes(c) ? c : ''; };
+  const isWoman = pf => (pMap[pf.personId] || {}).gender === 'female';
+  const matchesCompany = (pf, opt) => {
+    if (opt === 'פלוגת נשים') return companyOf(pf) === opt || isWoman(pf);
+    if (opt === 'אגף') return /^אגף/.test(String(pf.location || pf.cell || '').trim());
+    return companyOf(pf) === opt;
+  };
+  const companies = COMPANY_OPTIONS;
 
   // Filter state
   let filterDate     = (query && query.date)     || Utils.today();
-  let filterCompany  = (query && query.company)  || '';
+  let filterCompany  = (query && COMPANY_OPTIONS.includes(canon(query.company)) && canon(query.company)) || '';
 
   /* ─── helpers ─────────────────────────────────────────────────── */
 
   function filtered() {
     let rows = allPrisoners;
-    if (filterCompany)  rows = rows.filter(pf => pf.company  === filterCompany);
+    if (filterCompany)  rows = rows.filter(pf => matchesCompany(pf, filterCompany));
     return rows;
   }
 
@@ -51,8 +61,9 @@ Pages['counting-report'] = function(query) {
   function groupByCompanyLocation(rows) {
     const map = {};
     rows.forEach(pf => {
-      const key = (pf.company || 'לא משויך') + '||' + (pf.location || '');
-      if (!map[key]) map[key] = { company: pf.company || 'לא משויך', location: pf.location || '', rows: [] };
+      const co = companyOf(pf) || 'לא משויך';
+      const key = co + '||' + (pf.location || '');
+      if (!map[key]) map[key] = { company: co, location: pf.location || '', rows: [] };
       map[key].rows.push(pf);
     });
     return Object.values(map).sort((a, b) => (a.company + a.location).localeCompare(b.company + b.location));
