@@ -1,4 +1,4 @@
-/* deserter-retrieval.js — deserter search and retrieval */
+/* deserter-retrieval.js — אחזור עריק/משתמט (fields per legacy Alon retrieval screen) */
 'use strict';
 
 window.Pages = window.Pages || {};
@@ -7,26 +7,43 @@ Pages['deserter-retrieval'] = function(query) {
   const content = Utils.el('page-content');
   if (!Permissions.hasModuleAccess('investigation')) { content.innerHTML = EmptyState.accessDenied(); return; }
 
-  let filterStatus = '';
-  let filterSearch = '';
+  const EMPTY = { type: 'all', militaryNumber: '', nationalId: '', lastName: '', firstName: '', dateFrom: '', dateTo: '', activeOnly: false };
+  let f = Object.assign({}, EMPTY);
   let tableInstance = null;
 
   const people = Storage.getCollection(Storage.KEYS.PEOPLE);
   const pMap = Object.fromEntries(people.map(p => [p.id, p]));
+  // legacy records carry `type`, some carry `deserterType` — normalise on read only
+  const typeOf = file => file.type || file.deserterType || 'deserter';
+  const typeLabel = file => typeOf(file) === 'shirker' ? 'משתמט' : 'עריק';
 
   function getData() {
-    let files = Storage.getCollection(Storage.KEYS.DESERTER_FILES);
-    if (filterStatus) files = files.filter(f => f.status === filterStatus);
-    if (filterSearch) {
-      const q = filterSearch.toLowerCase();
-      files = files.filter(f => {
-        const p = pMap[f.personId];
-        return f.fileNumber.toLowerCase().includes(q) ||
-          (p && (p.firstName + ' ' + p.lastName).toLowerCase().includes(q)) ||
-          (p && p.militaryNumber.includes(q));
-      });
-    }
-    return files.sort((a, b) => b.startDate.localeCompare(a.startDate));
+    const files = Storage.getCollection(Storage.KEYS.DESERTER_FILES).filter(file => {
+      const p = pMap[file.personId] || {};
+      if (f.type !== 'all' && typeOf(file) !== f.type) return false;
+      if (f.militaryNumber && !(p.militaryNumber || '').includes(f.militaryNumber.trim())) return false;
+      if (f.nationalId && !(p.nationalId || '').includes(f.nationalId.trim())) return false;
+      if (f.lastName && !(p.lastName || '').includes(f.lastName.trim())) return false;
+      if (f.firstName && !(p.firstName || '').includes(f.firstName.trim())) return false;
+      if (f.dateFrom && (file.startDate || '') < f.dateFrom) return false;
+      if (f.dateTo && (file.startDate || '') > f.dateTo) return false;
+      if (f.activeOnly && file.status !== 'active') return false;
+      return true;
+    });
+    return files.sort((a, b) => (b.startDate || '').localeCompare(a.startDate || ''));
+  }
+
+  function readFilters() {
+    f = {
+      type: Utils.el('d-type').value,
+      militaryNumber: Utils.el('d-mil').value,
+      nationalId: Utils.el('d-nid').value,
+      lastName: Utils.el('d-last').value,
+      firstName: Utils.el('d-first').value,
+      dateFrom: Utils.el('d-from').value,
+      dateTo: Utils.el('d-to').value,
+      activeOnly: Utils.el('d-active').checked,
+    };
   }
 
   function renderPage() {
@@ -38,32 +55,36 @@ Pages['deserter-retrieval'] = function(query) {
 
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
           <button class="btn btn-secondary btn-sm" id="btn-export">${Utils.icon('download', 14)} ייצוא</button>
-          ${Permissions.can('createDeserterFile') ? `<button class="btn btn-primary" id="btn-new">${Utils.icon('plus', 14)} תיק עריקות חדש</button>` : ''}
+          ${Permissions.can('createDeserterFile') ? `<button class="btn btn-primary" id="btn-new">${Utils.icon('plus', 14)} תיק חדש</button>` : ''}
         </div>
 
-        <!-- Filter panel -->
         <div class="retrieval-panel">
-          <div class="retrieval-panel-header">סינון</div>
+          <div class="retrieval-panel-header">איתור עריק/משתמט</div>
           <div class="retrieval-grid">
-            <div class="form-group">
-              <label class="form-label">סטטוס</label>
-              <div style="display:flex;gap:6px;flex-wrap:wrap;padding-top:4px">
-                ${[{id:'',label:'הכל'}, ...DESERTER_STATUSES].map(s => `
-                  <button class="btn btn-sm ${filterStatus === s.id ? 'btn-primary' : 'btn-secondary'}" onclick="window._dFilterStatus('${s.id}')">${Utils.escHtml(s.label)}</button>
-                `).join('')}
-              </div>
-            </div>
-            <div class="form-group">
-              <label class="form-label">חיפוש</label>
-              <input class="form-control" id="d-search" placeholder="שם / מ.א / מספר תיק..." value="${Utils.escHtml(filterSearch)}">
-            </div>
+            <div class="form-group"><label class="form-label">סוג</label>
+              <select class="form-control" id="d-type">
+                <option value="all" ${f.type === 'all' ? 'selected' : ''}>הכל</option>
+                <option value="deserter" ${f.type === 'deserter' ? 'selected' : ''}>עריק</option>
+                <option value="shirker" ${f.type === 'shirker' ? 'selected' : ''}>משתמט</option>
+              </select></div>
+            <div class="form-group"><label class="form-label">מספר אישי</label><input class="form-control" id="d-mil" value="${Utils.escHtml(f.militaryNumber)}"></div>
+            <div class="form-group"><label class="form-label">ת.ז.</label><input class="form-control" id="d-nid" value="${Utils.escHtml(f.nationalId)}"></div>
+            <div class="form-group"><label class="form-label">שם משפחה</label><input class="form-control" id="d-last" value="${Utils.escHtml(f.lastName)}"></div>
+            <div class="form-group"><label class="form-label">שם פרטי</label><input class="form-control" id="d-first" value="${Utils.escHtml(f.firstName)}"></div>
+            <div class="form-group"><label class="form-label">מתאריך</label><input type="date" class="form-control" id="d-from" value="${f.dateFrom}"></div>
+            <div class="form-group"><label class="form-label">עד תאריך</label><input type="date" class="form-control" id="d-to" value="${f.dateTo}"></div>
+            <div class="form-group"><label class="form-label">&nbsp;</label>
+              <label style="display:flex;gap:8px;align-items:center;height:36px"><input type="checkbox" id="d-active" ${f.activeOnly ? 'checked' : ''}> הצג רק פעילים</label></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <button class="btn btn-primary" id="btn-search">${Utils.icon('search', 14)} אתר</button>
+            <button class="btn btn-secondary" id="btn-reset">נקה</button>
           </div>
         </div>
 
-        <!-- Table panel -->
         <div class="table-panel">
           <div class="table-panel-header">
-            <span>תיקי עריקות</span>
+            <span>תוצאות</span>
             <span style="font-size:12px;color:var(--color-text-muted)">${data.length} תיקים</span>
           </div>
           <div id="deserter-table"></div>
@@ -78,86 +99,38 @@ Pages['deserter-retrieval'] = function(query) {
       data,
       rowKey: 'id',
       columns: [
-        { key: 'fileNumber', label: 'מספר תיק', tdClass: 'td-number' },
-        { key: 'personId', label: 'שם', render: (v) => { const p = pMap[v]; return p ? Utils.escHtml(p.firstName + ' ' + p.lastName) : '—'; } },
+        { key: 'type', label: 'סוג', render: (v, row) => `<span class="badge ${typeOf(row) === 'shirker' ? 'badge-warning' : 'badge-danger'}">${typeLabel(row)}</span>` },
         { key: 'personId', label: 'מ"א', tdClass: 'td-id', render: (v) => { const p = pMap[v]; return p ? Utils.escHtml(p.militaryNumber) : '—'; } },
-        { key: 'deserterType', label: 'סוג', render: v => Utils.escHtml(v || '—') },
-        { key: 'startDate', label: 'תחילת עריקה', render: v => Utils.formatDate(v) },
-        { key: 'daysAbsent', label: 'ימי היעדרות', render: (v, row) => {
-          const days = Utils.daysBetween(row.startDate, row.endDate || Utils.today());
-          return `<strong>${days}</strong>`;
-        }},
+        { key: 'personId', label: 'ת"ז', tdClass: 'td-id', render: (v) => { const p = pMap[v]; return p ? Utils.escHtml(p.nationalId) : '—'; } },
+        { key: 'personId', label: 'שם פרטי', render: (v) => { const p = pMap[v]; return p ? Utils.escHtml(p.firstName) : '—'; } },
+        { key: 'personId', label: 'שם משפחה', render: (v) => { const p = pMap[v]; return p ? Utils.escHtml(p.lastName) : '—'; } },
+        { key: 'baseId', label: 'בסיס שיטור', render: (v) => { const b = BASE_MAP[v]; return b ? Utils.escHtml(b.shortName) : '—'; } },
+        { key: 'startDate', label: 'תחילת עריקות', render: v => Utils.formatDate(v) },
+        { key: 'daysAbsent', label: 'ימי היעדרות', render: (v, row) => `<strong>${Utils.daysBetween(row.startDate, row.endDate || Utils.today())}</strong>` },
         { key: 'status', label: 'סטטוס', render: v => StatusBadge.render(v) },
-        { key: 'investigatorName', label: 'חוקר', render: v => Utils.escHtml(v || '—') },
       ],
       actions: (row) => `
-        <button class="row-action-btn" onclick="Router.navigate('/deserter-file', {id:'${row.id}'})">${Utils.icon('view', 14)}</button>
-        ${Permissions.can('createDeserterFile') ? `<button class="row-action-btn" onclick="window.updateDeserterStatus('${row.id}')">${Utils.icon('edit', 14)}</button>` : ''}
+        <button class="row-action-btn" title="צפייה" onclick="Router.navigate('/deserter-file', {id:'${row.id}'})">${Utils.icon('view', 14)}</button>
       `,
       onRowClick: (row) => Router.navigate('/deserter-file', { id: row.id }),
-      rowClass: (row) => row.status === 'active' ? 'row-highlight-danger' : '',
-      emptyMessage: 'אין תיקי עריקות',
+      rowClass: (row) => row.status === 'active' ? 'row-critical' : '',
+      emptyMessage: 'לא נמצאו עריקים/משתמטים התואמים לחיפוש',
     });
 
-    Utils.el('d-search').addEventListener('input', Utils.debounce(() => {
-      filterSearch = Utils.el('d-search').value;
-      tableInstance.update(getData());
-    }, 300));
+    const doSearch = () => { readFilters(); renderPage(); };
+    Utils.el('btn-search').onclick = doSearch;
+    Utils.el('btn-reset').onclick = () => { f = Object.assign({}, EMPTY); renderPage(); };
+    content.querySelectorAll('.retrieval-panel input').forEach(el => el.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); }));
 
     Utils.el('btn-export').onclick = () => {
-      const rows = getData().map(f => {
-        const p = pMap[f.personId];
-        return [f.fileNumber, p ? p.firstName + ' ' + p.lastName : '', p ? p.militaryNumber : '', f.startDate, f.status];
+      const rows = getData().map(fl => {
+        const p = pMap[fl.personId] || {};
+        return [typeLabel(fl), p.militaryNumber || '', p.nationalId || '', p.firstName || '', p.lastName || '', fl.startDate || '', fl.status];
       });
-      Utils.exportCsv('deserters.csv', ['מספר תיק', 'שם', 'מ"א', 'תחילת עריקה', 'סטטוס'], rows);
+      Utils.exportCsv('deserters.csv', ['סוג', 'מ"א', 'ת"ז', 'שם פרטי', 'שם משפחה', 'תחילת עריקות', 'סטטוס'], rows);
     };
 
-    if (Utils.el('btn-new')) {
-      Utils.el('btn-new').onclick = () => showNewDeserterModal();
-    }
-
-    window._dFilterStatus = (status) => { filterStatus = status; renderPage(); };
-
-    window.updateDeserterStatus = async (id) => {
-      const file = Storage.getCollection(Storage.KEYS.DESERTER_FILES).find(f => f.id === id);
-      if (!file) return;
-      const statuses = DESERTER_STATUSES.map(s => `<option value="${s.id}" ${file.status === s.id ? 'selected' : ''}>${s.label}</option>`).join('');
-      Modal.open({
-        title: 'עדכון סטטוס עריק',
-        body: `
-          <div class="form-group">
-            <label class="form-label">סטטוס חדש</label>
-            <select id="ds-status" class="form-control">${statuses}</select>
-          </div>
-          <div class="form-group">
-            <label class="form-label">תאריך סיום</label>
-            <input type="date" id="ds-end-date" class="form-control" value="${file.endDate || ''}">
-          </div>
-          <div class="form-group">
-            <label class="form-label">הערות</label>
-            <textarea id="ds-notes" class="form-control" rows="2">${Utils.escHtml(file.notes || '')}</textarea>
-          </div>
-        `,
-        footer: `
-          <button class="btn btn-secondary" onclick="Modal.close()">ביטול</button>
-          <button class="btn btn-primary" onclick="window._saveDeserterStatus('${id}')">שמור</button>
-        `,
-      });
-    };
-
-    window._saveDeserterStatus = (id) => {
-      const file = Storage.getCollection(Storage.KEYS.DESERTER_FILES).find(f => f.id === id);
-      if (!file) return;
-      file.status = Utils.el('ds-status').value;
-      file.endDate = Utils.el('ds-end-date').value || file.endDate;
-      file.notes = Utils.el('ds-notes').value;
-      file.updatedAt = new Date().toISOString();
-      Storage.upsert(Storage.KEYS.DESERTER_FILES, file);
-      Audit.log({ module: 'investigation', action: 'update', entityType: 'deserterFile', entityId: id, description: `עדכון תיק עריקות ${file.fileNumber}` });
-      Modal.close();
-      Toast.success('סטטוס עודכן');
-      renderPage();
-    };
+    if (Utils.el('btn-new')) Utils.el('btn-new').onclick = () => showNewDeserterModal();
   }
 
   function showNewDeserterModal() {
@@ -174,13 +147,14 @@ Pages['deserter-retrieval'] = function(query) {
             </select>
           </div>
           <div class="form-group">
-            <label class="form-label">סוג עריקה</label>
+            <label class="form-label">סוג</label>
             <select id="nd-type" class="form-control">
-              ${DESERTER_TYPE.map(t => `<option value="${t.id}">${Utils.escHtml(t.label)}</option>`).join('')}
+              <option value="deserter">עריק</option>
+              <option value="shirker">משתמט</option>
             </select>
           </div>
           <div class="form-group">
-            <label class="form-label">תאריך תחילה <span class="required">*</span></label>
+            <label class="form-label">עריק מתאריך <span class="required">*</span></label>
             <input type="date" id="nd-start" class="form-control" value="${Utils.today()}">
           </div>
           <div class="form-group">
@@ -203,19 +177,24 @@ Pages['deserter-retrieval'] = function(query) {
       const personId = Utils.el('nd-person').value;
       const startDate = Utils.el('nd-start').value;
       if (!personId || !startDate) { Toast.error('יש לבחור אדם ותאריך'); return; }
-
+      const dup = Storage.getCollection(Storage.KEYS.DESERTER_FILES).find(x => x.personId === personId && x.status === 'active');
+      if (dup) { Toast.error('כבר קיים תיק פעיל לאדם זה (' + dup.fileNumber + ')'); return; }
+      const user = Auth.getCurrentUser();
       const file = {
         id: 'df_' + Utils.generateId(),
-        fileNumber: 'DF-' + String(Math.floor(Math.random() * 9000) + 1000),
+        fileNumber: 'ED-' + String(Math.floor(Math.random() * 900000) + 100000),
         personId,
-        deserterType: Utils.el('nd-type').value,
+        type: Utils.el('nd-type').value,
+        openDate: Utils.today(),
         startDate,
         endDate: null,
         status: 'active',
         lastLocationKnown: Utils.el('nd-location').value,
         notes: Utils.el('nd-notes').value,
-        assignedTo: Auth.getCurrentUser() ? Auth.getCurrentUser().firstName + ' ' + Auth.getCurrentUser().lastName : '',
+        assignedTo: user ? user.firstName + ' ' + user.lastName : '',
         activities: [],
+        addresses: [],
+        pastDesertions: [],
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
