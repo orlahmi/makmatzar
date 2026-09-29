@@ -37,10 +37,15 @@ Pages.dashboard = function(query) {
   const overdueTasks = openTasks.filter(t => t.date < today);
 
   const countingSessions = Storage.getCollection(Storage.KEYS.COUNTING_SESSIONS);
-  const activeSession = countingSessions.find(s => s.status === 'in_progress') || null;
+  // today's in-progress session first; otherwise the most recent in-progress session (its date is shown)
+  const inProg = countingSessions.filter(s => s.status === 'in_progress').sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const activeSession = inProg.find(s => s.date === today) || inProg[0] || null;
   const countingEntries = activeSession
     ? Storage.getCollection(Storage.KEYS.COUNTING_ENTRIES).filter(e => e.sessionId === activeSession.id)
     : [];
+
+  const sessionExpected = activeSession ? activePrisoners.length : 0;
+  const sessionCounted = activeSession ? countingEntries.filter(e => e.present || Object.values(e.shiftChecks || {}).some(Boolean)).length : 0;
 
   const notifications = Storage.getCollection(Storage.KEYS.NOTIFICATIONS);
   const criticalNotif = notifications.filter(n => n.type === 'critical' && !n.read);
@@ -120,8 +125,8 @@ Pages.dashboard = function(query) {
     attentionItems.push({ lvl:'attention', icon:'coordination',text:`${mashlatWaiting.length} ממתינים להגיע היום`,           route:'/mashlat',         btn:'מעקב' });
   if (overdueTasks.length > 0)
     attentionItems.push({ lvl:'attention', icon:'task',       text:`${overdueTasks.length} משימות באיחור`,                  route:'/tasks',           btn:'פתח' });
-  if (activeSession && (activeSession.totalExpected - activeSession.totalCounted) > 0)
-    attentionItems.push({ lvl:'attention', icon:'counting',   text:`ספירה פעילה — ${activeSession.totalExpected - activeSession.totalCounted} חסרים`, route:'/counting-report', btn:'המשך ספירה' });
+  if (activeSession && (sessionExpected - sessionCounted) > 0)
+    attentionItems.push({ lvl:'attention', icon:'counting',   text:`ספירה פעילה — ${sessionExpected - sessionCounted} חסרים`, route:'/counting-report', btn:'המשך ספירה' });
   if (criticalNotif.length > 0)
     attentionItems.push({ lvl:'critical', icon:'bell',        text:`${criticalNotif.length} התראות קריטיות`,                route:'/notifications-center', btn:'צפה' });
   if (pendingStock.length > 0)
@@ -219,9 +224,9 @@ Pages.dashboard = function(query) {
   }
 
   /* ── Derived values ───────────────────────────────────── */
-  const sessionMissing = activeSession ? activeSession.totalExpected - activeSession.totalCounted : 0;
-  const sessionPct = activeSession && activeSession.totalExpected > 0
-    ? Math.round(activeSession.totalCounted / activeSession.totalExpected * 100) : 0;
+  const sessionMissing = activeSession ? sessionExpected - sessionCounted : 0;
+  const sessionPct = activeSession && sessionExpected > 0
+    ? Math.round(sessionCounted / sessionExpected * 100) : 0;
   const sessionColor = sessionPct >= 100 ? 'var(--color-success)'
     : sessionPct >= 80 ? 'var(--color-warning)' : 'var(--color-danger)';
 
@@ -269,8 +274,8 @@ Pages.dashboard = function(query) {
                overdueTasks.length > 0 ? 'var(--color-warning)' : 'var(--color-info)',
                '/tasks', 'task')}
         ${activeSession
-          ? kpi(activeSession.totalCounted + '/' + activeSession.totalExpected,
-                 'ספירה נוכחית',
+          ? kpi(sessionCounted + '/' + sessionExpected,
+                 'ספירה נוכחית' + (activeSession.date && activeSession.date !== today ? ' · ' + Utils.formatDate(activeSession.date) : ''),
                  sessionMissing > 0 ? sessionMissing + ' חסרים' : 'הושלמה ✓',
                  sessionMissing > 0 ? 'var(--color-warning)' : 'var(--color-success)',
                  '/counting-report', 'counting')
@@ -357,7 +362,7 @@ Pages.dashboard = function(query) {
           <div class="card-body">
             ${activeSession ? `
               <div class="dash-count-progress">
-                <span class="dash-count-fraction">${activeSession.totalCounted}<span class="dash-count-frac-denom">/${activeSession.totalExpected}</span></span>
+                <span class="dash-count-fraction">${sessionCounted}<span class="dash-count-frac-denom">/${sessionExpected}</span></span>
                 <span class="dash-count-pct" style="color:${sessionColor}">${sessionPct}%</span>
               </div>
               <div class="dash-count-bar-wrap">

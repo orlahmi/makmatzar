@@ -158,6 +158,10 @@ Pages['deserter-retrieval'] = function(query) {
             <input type="date" id="nd-start" class="form-control" value="${Utils.today()}">
           </div>
           <div class="form-group">
+            <label class="form-label">בסיס שיטור מטפל <span class="required">*</span></label>
+            <select id="nd-base" class="form-control">${DEMO_BASES.map(b => `<option value="${b.id}" ${(AppState.get('currentBase') || {}).id === b.id ? 'selected' : ''}>${Utils.escHtml(b.shortName)}</option>`).join('')}</select>
+          </div>
+          <div class="form-group">
             <label class="form-label">מיקום אחרון ידוע</label>
             <input id="nd-location" class="form-control">
           </div>
@@ -184,6 +188,7 @@ Pages['deserter-retrieval'] = function(query) {
         id: 'df_' + Utils.generateId(),
         fileNumber: 'ED-' + String(Math.floor(Math.random() * 900000) + 100000),
         personId,
+        baseId: Utils.el('nd-base').value,
         type: Utils.el('nd-type').value,
         openDate: Utils.today(),
         startDate,

@@ -67,7 +67,7 @@ Pages['add-task'] = function(query) {
               <input type="date" name="date" class="form-control" value="${Utils.today()}" required>
             </div>
             <div class="form-group">
-              <label class="form-label">שעה</label>
+              <label class="form-label">שעה <span class="required" id="time-star" style="display:none">*</span></label>
               <input type="time" name="time" class="form-control">
             </div>
             <div class="form-group">
@@ -126,6 +126,9 @@ Pages['add-task'] = function(query) {
       ${Utils.classificationFooter()}
     </div>
   `;
+
+  const catSel = Utils.el('task-category');
+  catSel.addEventListener('change', () => { Utils.el('time-star').style.display = catSel.value === 'operational' ? '' : 'none'; });
 
   // Participants
   Utils.el('btn-add-participant').onclick = () => {
@@ -229,6 +232,11 @@ Pages['add-task'] = function(query) {
       showFieldError('description', 'שדה חובה — יש להזין תיאור');
       firstInvalid = firstInvalid || document.querySelector('[name="description"]');
     }
+    if (data.taskCategory === 'operational') {
+      if (!data.time) { showFieldError('time', 'שדה חובה — משימה מבצעית דורשת שעה'); firstInvalid = firstInvalid || document.querySelector('[name="time"]'); }
+      if (!participants.some(p => p.personId)) { Toast.error('משימה מבצעית דורשת לפחות משתתף אחד'); firstInvalid = firstInvalid || Utils.el('btn-add-participant'); }
+    }
+    if (participants.some(p => !p.personId)) { Toast.error('יש לבחור אדם בכל שורת משתתף או למחוק אותה'); firstInvalid = firstInvalid || document.querySelector('.participant-select'); }
     const missingEquipId = equipment.some(e => !e.type || !String(e.equipmentId || '').trim());
     if (missingEquipId) {
       Toast.error('יש לבחור ציוד ולהזין מזהה ציוד לכל שורה');

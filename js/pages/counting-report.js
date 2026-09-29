@@ -89,6 +89,8 @@ Pages['counting-report'] = function(query) {
     return `${total} / ${served}`;
   }
 
+  const LEGACY_SHIFTS = { morning: 'בוקר', afternoon: 'צהריים', night: 'לילה' };
+  function shiftLabel(id) { const x = SHIFTS.find(z => z.id === id); return x ? 'משמרת ' + x.label : (LEGACY_SHIFTS[id] || id || '—'); }
   function sessionEntry(pfId, viewSession) {
     if (!viewSession) return null;
     return entries.find(e => e.sessionId === viewSession.id && e.prisonerFileId === pfId) || null;
@@ -324,11 +326,7 @@ Pages['counting-report'] = function(query) {
   /* ─── session management ──────────────────────────────────────── */
 
   function showStartSessionModal() {
-    const shiftOpts = [
-      { id: 'morning',   label: 'בוקר',    time: '06:00–14:00' },
-      { id: 'afternoon', label: 'צהריים',  time: '14:00–22:00' },
-      { id: 'night',     label: 'לילה',    time: '22:00–06:00' },
-    ];
+    const shiftOpts = SHIFTS.map(x => ({ id: x.id, label: 'משמרת ' + x.label, time: '' }));
     Modal.open({
       title: 'פתיחת ספירה חדשה',
       body: `
@@ -336,7 +334,7 @@ Pages['counting-report'] = function(query) {
           <div class="form-group">
             <label class="form-label">משמרת</label>
             <select id="cs-shift" class="form-control">
-              ${shiftOpts.map(s => `<option value="${s.id}">${Utils.escHtml(s.label)} (${s.time})</option>`).join('')}
+              ${shiftOpts.map(s => `<option value="${s.id}">${Utils.escHtml(s.label)}</option>`).join('')}
             </select>
           </div>
           <div class="form-group">
@@ -412,7 +410,7 @@ Pages['counting-report'] = function(query) {
             ${completed.map(s => `<tr>
               <td class="td-number">${Utils.escHtml(s.sessionNumber)}</td>
               <td>${Utils.formatDate(s.date)}</td>
-              <td>${Utils.escHtml(s.shift)}</td>
+              <td>${Utils.escHtml(shiftLabel(s.shift))}</td>
               <td>${Utils.escHtml(s.commander)}</td>
               <td>${Utils.formatDateTime(s.startedAt)}</td>
               <td>${s.closedAt ? Utils.formatDateTime(s.closedAt) : '—'}</td>
