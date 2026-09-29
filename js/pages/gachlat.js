@@ -278,6 +278,13 @@ window.Pages['gachlat'] = function(query) {
     };
   }
 
+  function categoryForOffense(offense) {
+    var o = (offense || '').toLowerCase();
+    if (o.indexOf('עריק') !== -1) return 'עריקות';
+    if (o.indexOf('סמים') !== -1 || o.indexOf('סם') !== -1) return 'שימוש בסמים';
+    return 'כללי';
+  }
+
   function questionsForOffense(offense) {
     var o = (offense || '').toLowerCase();
     if (o.indexOf('עריק') !== -1) return GACHLAT_QUESTIONNAIRES['עריקות'];
@@ -708,7 +715,7 @@ window.Pages['gachlat'] = function(query) {
       '<div>' +
         '<div style="font-size:13px;font-weight:600;color:#1a3a5c;margin-bottom:10px">אבחון — שאלון</div>' +
         '<div style="margin-bottom:12px">' +
-          '<label style="font-size:12px;color:#555">מאבחנת</label>' +
+          '<label style="font-size:12px;color:#555">מאבחנת *</label>' +
           '<input id="gc-assessor" value="' + Utils.escHtml(c.assessorName || '') + '" style="width:100%;margin-top:2px;font-family:inherit;font-size:13px;direction:rtl;border:1px solid #ccc;border-radius:4px;padding:4px 8px;height:32px;box-sizing:border-box">' +
         '</div>' +
         questHtml +
@@ -865,9 +872,9 @@ window.Pages['gachlat'] = function(query) {
       size: 'md',
       body: (
         '<div style="direction:rtl">' +
-          mField('gc-sch-date', 'תאריך', 'date') +
-          mField('gc-sch-time', 'שעה', 'time') +
-          mField('gc-sch-assessor', 'מאבחנת', 'text') +
+          mField('gc-sch-date', 'תאריך אבחון *', 'date') +
+          mField('gc-sch-time', 'שעת אבחון *', 'time') +
+          mField('gc-sch-assessor', 'מאבחנת *', 'text') +
           mField('gc-sch-location', 'מיקום', 'text') +
           mField('gc-sch-notes', 'הערות', 'textarea') +
         '</div>'
@@ -893,7 +900,9 @@ window.Pages['gachlat'] = function(query) {
     var timeEl  = Utils.el('gc-sch-time');
     var assrEl  = Utils.el('gc-sch-assessor');
     var locEl   = Utils.el('gc-sch-location');
-    if (!dateEl || !dateEl.value) { Toast.error('יש לבחור תאריך'); return; }
+    if (!dateEl || !dateEl.value) { Toast.error('יש לבחור תאריך אבחון'); return; }
+    if (!timeEl || !timeEl.value) { Toast.error('יש להזין שעת אבחון'); return; }
+    if (!assrEl || !assrEl.value.trim()) { Toast.error('יש להזין שם מאבחנת'); return; }
     c.assessmentStatus = 'scheduled';
     c.scheduledDate    = dateEl.value;
     c.assessmentTime   = timeEl ? timeEl.value : '';
@@ -913,7 +922,7 @@ window.Pages['gachlat'] = function(query) {
     Modal.open({
       title: 'סירוב לאבחון — ' + Utils.escHtml(c.name),
       size: 'sm',
-      body: '<div style="direction:rtl">' + mField('gc-ref-reason', 'סיבת סירוב', 'textarea') + '</div>',
+      body: '<div style="direction:rtl">' + mField('gc-ref-reason', 'סיבת סירוב *', 'textarea') + '</div>',
       footer: (
         '<button type="button" class="btn btn-danger" onclick="window.gcConfirmRefusal(\'' + cid + '\')">אשר סירוב</button>' +
         '<button type="button" class="btn btn-secondary" onclick="Modal.close()">ביטול</button>'
@@ -925,6 +934,7 @@ window.Pages['gachlat'] = function(query) {
     var c = Storage.getById(KEY, cid);
     if (!c) return;
     var reason = ((Utils.el('gc-ref-reason') || {}).value || '').trim();
+    if (!reason) { Toast.error('יש להזין סיבת סירוב'); return; }
     c.assessmentStatus = 'refused';
     c.refusalReason    = reason;
     addHistory(c, 'refused', 'סירב לאבחון' + (reason ? ': ' + reason : ''));
@@ -939,6 +949,23 @@ window.Pages['gachlat'] = function(query) {
   function setStatus(cid, newStatus, histLabel) {
     var c = Storage.getById(KEY, cid);
     if (!c) return;
+    // completion validation (generic operational minimum — no professional policy)
+    var problems = [];
+    if (newStatus === 'completed') {
+      if (!c.assessorName) problems.push('מאבחנת');
+      if (!c.scheduledDate) problems.push('תאריך אבחון');
+      if (!c.assessmentTime) problems.push('שעת אבחון');
+      var qs = questionsForOffense(c.offense);
+      var ans = c.questionnaire || {};
+      if (!c.questionnaireCategory) problems.push('סוג שאלון (שמור את האבחון)');
+      var unanswered = qs.filter(function(q) { return !String(ans[q.key] || '').trim(); });
+      if (unanswered.length) problems.push('תשובות לשאלון (' + unanswered.length + ' חסרות)');
+    }
+    if (newStatus === 'done') {
+      if (c.assessmentStatus !== 'completed' && c.assessmentStatus !== 'done') problems.push('אבחון שבוצע');
+      if (!String(c.assessmentNotes || '').trim()) problems.push('סיכום אבחון');
+    }
+    if (problems.length) { Toast.error('לא ניתן להמשיך — חסר: ' + problems.join(', ')); return; }
     c.assessmentStatus = newStatus;
     addHistory(c, newStatus, histLabel);
     save(c);
@@ -1066,11 +1093,15 @@ window.Pages['gachlat'] = function(query) {
       var fresh = Storage.getById(KEY, c.id);
       if (!fresh) return;
       var assessorEl = Utils.el('gc-assessor');
-      if (assessorEl) fresh.assessorName = assessorEl.value;
-      if (!fresh.questionnaire) fresh.questionnaire = {};
-      di.querySelectorAll('[data-qa-key]').forEach(function(el) {
-        fresh.questionnaire[el.dataset.qaKey] = el.value;
-      });
+      var assessorVal = assessorEl ? assessorEl.value.trim() : (fresh.assessorName || '');
+      var qa = {};
+      di.querySelectorAll('[data-qa-key]').forEach(function(el) { qa[el.dataset.qaKey] = el.value; });
+      var missingQ = Object.keys(qa).filter(function(k) { return !String(qa[k] || '').trim(); });
+      if (!assessorVal) { Toast.error('יש להזין שם מאבחנת'); return; }
+      if (missingQ.length) { Toast.error('יש למלא את כל תשובות השאלון (' + missingQ.length + ' חסרות)'); return; }
+      fresh.assessorName = assessorVal;
+      fresh.questionnaire = qa;
+      fresh.questionnaireCategory = categoryForOffense(fresh.offense);
       addHistory(fresh, 'assessment_saved', 'שאלון אבחון נשמר');
       save(fresh);
       Toast.success('אבחון נשמר');

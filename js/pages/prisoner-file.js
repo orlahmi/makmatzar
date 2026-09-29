@@ -6,6 +6,8 @@ window.Pages = window.Pages || {};
 const CLASS_FLAGS = ['התנהגות כלייאתית', 'תלונות ודוחו"ת', 'טיפול נפשי', 'בעיות רפואיות', 'בעל עבר פלילי', 'תיקי מצ"ח', 'חשש בריחה', 'כלוא חריג', 'רמת סיכון גבוהה', 'רישום מודיעיני', 'בדוקאי סמים', 'טעון הגנה/הפרדה'];
 const CLASS_FIELDS = [['religion', 'דת'], ['population', 'סוג אוכלוסיה'], ['offenseDesc', 'תאור עבירה'], ['placementRec', 'המלצה לשיבוץ'], ['company', 'תחום פלוגה'], ['profile', 'פרופיל'], ['defects', 'סעיפי ליקוי'], ['escortInstructions', 'הוראות לליווי'], ['notes', 'הערות']];
 
+const PERSONAL_FLAGS = [['haredi', 'חרדי'], ['vegetarian', 'צמחוני'], ['kosher', 'מנת בד"צ'], ['allergies', 'אלרגני'], ['exceptional', 'חריג'], ['victimFile', 'תיק נפגע עבירה'], ['additionalFile', 'תיק נוסף']];
+
 Pages['prisoner-file'] = function(query) {
   const content = Utils.el('page-content');
   if (!Permissions.hasModuleAccess('incarceration')) { content.innerHTML = EmptyState.accessDenied(); return; }
@@ -224,7 +226,7 @@ Pages['prisoner-file'] = function(query) {
 
     Tabs.create({
       containerId: 'prisoner-tabs',
-      defaultTab: 'general',
+      defaultTab: (function() { const t = window._pfTab || 'general'; window._pfTab = null; return t; })(),
       tabs: [
         { id: 'general', label: 'פרטים אישיים' },
         { id: 'calc', label: 'חישוב עונש' },
@@ -250,22 +252,62 @@ Pages['prisoner-file'] = function(query) {
       ],
     });
 
-    window.releasePrisoner = async (id) => {
-      const ok = await Modal.confirm({ title: 'שחרור כלוא', message: 'האם לסמן כלוא זה כמשוחרר?', type: 'warning', confirmLabel: 'שחרר' });
-      if (!ok) return;
-      file.status = 'released';
-      file.actualRelease = Utils.today();
-      file.updatedAt = new Date().toISOString();
-      Storage.upsert(Storage.KEYS.PRISONER_FILES, file);
-      Audit.log({ module: 'incarceration', action: 'release', entityType: 'prisonerFile', entityId: id, description: `שחרור כלוא ${file.fileNumber}` });
-      Toast.success('הכלוא שוחרר');
-      setTimeout(() => Router.navigate('/prisoner-file', { id }), 400);
-    };
+    window.releasePrisoner = (id) => window.editRelease(id, true);   // never bypasses release validation
   }
 
   function infoRow(label, value) {
     return `<div class="info-list-row"><div class="info-list-label">${Utils.escHtml(label)}</div><div class="info-list-value">${value}</div></div>`;
   }
+
+  // ---------- פרטים אישיים (old prisoner-file personal block; fields stored on the file) ----------
+  function renderPersonalDetails(file, person, esc) {
+    const cand = Storage.getCollection(Storage.KEYS.GACHLAT_CANDIDATES).some(c => c.prisonerFileId === file.id);
+    const year = person && person.birthDate ? String(person.birthDate).slice(0, 4) : '';
+    const dis = canEdit ? '' : 'disabled';
+    return `
+      <div class="card" style="grid-column:1/-1">
+        <div class="card-header"><div class="card-title">פרטים אישיים</div>
+          ${canEdit ? `<button class="btn btn-primary btn-sm" onclick="window.savePrisonerPersonal('${file.id}')">שמור</button>` : ''}</div>
+        <div class="card-body" style="display:flex;gap:20px;flex-wrap:wrap">
+          <div style="width:130px;text-align:center">
+            <div id="pp-photo-box" style="width:120px;height:150px;border:1px dashed var(--color-border);border-radius:var(--radius-md);display:flex;align-items:center;justify-content:center;overflow:hidden;color:var(--color-text-muted);font-size:12px">
+              ${file.photo ? `<img src="${file.photo}" alt="תמונה" style="max-width:100%;max-height:100%">` : 'אין תמונה'}</div>
+            ${canEdit ? `<label class="btn btn-secondary btn-sm" style="margin-top:6px;cursor:pointer">העלאת תמונה<input type="file" id="pp-photo" accept="image/*" style="display:none"></label>` : ''}
+          </div>
+          <div style="flex:1;min-width:280px">
+            <div class="form-row form-row-3">
+              <div class="form-group"><label class="form-label">מספר זהות</label><input class="form-control" value="${Utils.escHtml(person ? person.nationalId : '')}" readonly></div>
+              <div class="form-group"><label class="form-label">שם האב</label><input id="pp-father" class="form-control" value="${Utils.escHtml(file.fatherName || '')}" ${dis}></div>
+              <div class="form-group"><label class="form-label">טלפון ביחידה</label><input id="pp-unitphone" class="form-control" value="${Utils.escHtml(file.unitPhone || '')}" ${dis}></div>
+              <div class="form-group"><label class="form-label">שנת לידה</label><input class="form-control" value="${Utils.escHtml(year)}" readonly></div>
+              <div class="form-group"><label class="form-label">ארץ לידה</label><input id="pp-country" class="form-control" value="${Utils.escHtml(file.birthCountry || '')}" ${dis}></div>
+              <div class="form-group"><label class="form-label">רמת סיכון</label><div>${StatusBadge.renderRisk(file.riskLevel)}</div></div>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:6px">
+              ${PERSONAL_FLAGS.map(([k, l]) => `<label style="display:flex;gap:6px;align-items:center"><input type="checkbox" class="pp-flag" data-k="${k}" ${file[k] ? 'checked' : ''} ${dis}> ${l}</label>`).join('')}
+              <span class="badge ${cand ? 'badge-info' : 'badge-draft'}">מאותר גחל"ת: ${cand ? 'כן' : 'לא'}</span>
+            </div>
+          </div>
+        </div>
+      </div>`;
+  }
+  window.savePrisonerPersonal = (fid) => {
+    const f = Storage.getById(Storage.KEYS.PRISONER_FILES, fid);
+    f.fatherName = Utils.el('pp-father').value.trim(); f.unitPhone = Utils.el('pp-unitphone').value.trim(); f.birthCountry = Utils.el('pp-country').value.trim();
+    document.querySelectorAll('.pp-flag').forEach(c => { f[c.dataset.k] = c.checked; });
+    if (window._pfPhoto) f.photo = window._pfPhoto;
+    f.updatedAt = new Date().toISOString(); Storage.upsert(Storage.KEYS.PRISONER_FILES, f);
+    Audit.log({ module: 'incarceration', action: 'update', entityType: 'prisonerFile', entityId: fid, description: 'עדכון פרטים אישיים בתיק ' + (f.fileNumber || '') });
+    window._pfPhoto = null; Toast.success('הפרטים האישיים נשמרו'); Router.navigate('/prisoner-file', { id: fid });
+  };
+  if (!window._pfPhotoBound) document.addEventListener('change', window._pfPhotoBound = function(e) {
+    if (!e.target || e.target.id !== 'pp-photo') return;
+    const file = e.target.files && e.target.files[0]; if (!file) return;
+    if (file.size > 300 * 1024) { Toast.error('התמונה גדולה מדי (עד 300KB)'); e.target.value = ''; return; }
+    const rd = new FileReader();
+    rd.onload = () => { window._pfPhoto = rd.result; const box = document.getElementById('pp-photo-box'); if (box) box.innerHTML = '<img src="' + rd.result + '" alt="תמונה" style="max-width:100%;max-height:100%">'; Toast.info('לחץ "שמור" לשמירת התמונה'); };
+    rd.readAsDataURL(file);
+  });
 
   function renderPrisonerGeneral(file, person, esc, fd) {
     const rankLabel = (id) => { const r = RANK_MAP && RANK_MAP[id]; return r ? r.label : (id || '—'); };
@@ -313,6 +355,7 @@ Pages['prisoner-file'] = function(query) {
             </div>
           </div>
         </div>
+        ${renderPersonalDetails(file, person, esc)}
         ${(function() {
           const coord = (Storage.getCollection(Storage.KEYS.MASHLAT_COORDINATIONS) || []).find(c => c.prisonerFileId === file.id || c.id === file.coordinationId);
           if (!coord) return '';
@@ -381,28 +424,98 @@ Pages['prisoner-file'] = function(query) {
     `;
   }
 
-  function renderPrisonerRestrictions(file, esc, fd) {
-    const restrictions = file.restrictions || [];
-    return `
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title">הגבלות</div>
-          ${canEdit ? `<button class="btn btn-secondary btn-sm" onclick="Toast.info('הוספת הגבלה בפיתוח')">הוסף הגבלה</button>` : ''}
-        </div>
-        <div class="card-body">
-          ${restrictions.length === 0 ? '<div class="empty-state-desc">אין הגבלות מיוחדות.</div>' : `
-            <table class="data-table">
-              <thead><tr><th>סוג</th><th>מתאריך</th><th>עד תאריך</th><th>סיבה</th></tr></thead>
-              <tbody>
-                ${restrictions.map(r => `<tr><td>${esc(r.type)}</td><td>${fd(r.from)}</td><td>${fd(r.to)}</td><td>${esc(r.reason)}</td></tr>`).join('')}
-              </tbody>
-            </table>
-          `}
-        </div>
-      </div>
-    `;
+
+  // ---------- generic add-record forms (visits, restrictions, requests, interviews, calls) ----------
+  const REQUEST_STATUSES = ['בטיפול', 'ממתין', 'אושרה', 'נדחתה'];
+  const DEPOSIT_TYPES = ['חפץ אישי', 'מסמכים', 'כסף', 'אחר'];
+  const RECORD_FORMS = {
+    visits: { title: 'רישום ביקור', list: 'visits', tab: 'visits', audit: 'רישום ביקור', fields: [
+      ['date', 'תאריך', 'date', true, 'today'], ['time', 'שעה', 'time', true], ['visitorName', 'שם המבקר', 'text', true],
+      ['relation', 'קרבה / קשר', 'text', true], ['duration', 'משך (דקות)', 'number', false], ['notes', 'הערות', 'text', false]] },
+    restrictions: { title: 'הוספת הגבלה', list: 'restrictions', tab: 'restrictions', audit: 'הוספת הגבלה', fields: [
+      ['type', 'סוג הגבלה', 'text', true], ['from', 'מתאריך', 'date', true, 'today'], ['to', 'עד תאריך', 'date', false], ['reason', 'סיבה', 'text', true]] },
+    requests: { title: 'בקשה חדשה', list: 'requests', tab: 'requests', audit: 'הוספת בקשה', fields: [
+      ['subject', 'סוג הבקשה', 'text', true], ['date', 'תאריך בקשה', 'date', true, 'today'], ['status', 'סטטוס טיפול', 'select', true, REQUEST_STATUSES],
+      ['days', 'כמות ימים', 'number', false], ['response', 'תגובה', 'text', false]] },
+    interviews: { title: 'ראיון חדש', list: 'interviews', tab: 'interviews', audit: 'הוספת ראיון', fields: [
+      ['date', 'תאריך', 'date', true, 'today'], ['interviewer', 'מראיין', 'text', true], ['subject', 'נושא', 'text', true], ['summary', 'סיכום', 'text', true]] },
+    phoneCalls: { title: 'שיחת טלפון', list: 'phoneCalls', tab: 'phoneCalls', audit: 'הוספת שיחת טלפון', fields: [
+      ['date', 'תאריך', 'date', true, 'today'], ['time', 'שעה', 'time', true], ['contact', 'איש קשר / מספר', 'text', true], ['duration', 'משך (דקות)', 'number', false]] },
+    depositBags: { title: 'שקית פקדון חדשה', list: 'depositBags', tab: 'deposits', audit: 'הוספת שקית פקדון', fields: [
+      ['number', 'מספר שקית', 'text', true], ['status', 'סטטוס שקית', 'select', true, ['פעיל', 'נמסר']], ['receiver', 'מקבל', 'text', true],
+      ['date', 'תאריך', 'date', true, 'today'], ['time', 'שעה', 'time', true], ['notes', 'הערות לשקית', 'text', false]] },
+  };
+
+  function fieldHtml(id, f, val) {
+    const [k, label, type, req, extra] = f;
+    const v = val != null ? val : (extra === 'today' ? Utils.today() : '');
+    const star = req ? ' <span class="required">*</span>' : '';
+    if (type === 'select') {
+      return `<div class="form-group"><label class="form-label">${label}${star}</label><select id="${id}" class="form-control"><option value="">בחר</option>${extra.map(o => `<option value="${Utils.escHtml(o)}" ${o === v ? 'selected' : ''}>${Utils.escHtml(o)}</option>`).join('')}</select></div>`;
+    }
+    return `<div class="form-group"><label class="form-label">${label}${star}</label><input id="${id}" type="${type}" ${type === 'number' ? 'min="0"' : ''} class="form-control" value="${Utils.escHtml(String(v))}"></div>`;
   }
 
+  // shared validation: required marked fields + optional date-order check
+  function validateFields(fields, prefix, extraCheck) {
+    let first = null; const missing = [];
+    fields.forEach(f => {
+      const el = Utils.el(prefix + f[0]); if (!el) return;
+      el.classList.remove('is-invalid');
+      if (f[3] && !String(el.value).trim()) { missing.push(f[1]); el.classList.add('is-invalid'); if (!first) first = el; }
+    });
+    if (missing.length) { Toast.error('שדות חובה חסרים: ' + missing.join(', ')); if (first) first.focus(); return false; }
+    return extraCheck ? extraCheck() : true;
+  }
+
+  window.pfRecordForm = (fid, key) => {
+    const cfg = RECORD_FORMS[key];
+    Modal.open({
+      title: cfg.title,
+      body: `<div class="form-row form-row-2">${cfg.fields.map(f => fieldHtml('rf-' + f[0], f)).join('')}</div>`,
+      footer: `<button class="btn btn-secondary" onclick="Modal.close()">ביטול</button><button class="btn btn-primary" id="rf-save">שמור</button>`,
+    });
+    Utils.el('rf-save').onclick = () => {
+      const ok = validateFields(cfg.fields, 'rf-', () => {
+        if (key === 'restrictions' && Utils.el('rf-to').value && Utils.el('rf-to').value < Utils.el('rf-from').value) { Toast.error('תאריך הסיום לא יכול להיות לפני תאריך ההתחלה'); return false; }
+        if (key === 'depositBags') {
+          const f0 = Storage.getById(Storage.KEYS.PRISONER_FILES, fid);
+          if ((f0.depositBags || []).some(b => String(b.number) === Utils.el('rf-number').value.trim())) { Toast.error('מספר שקית זה כבר קיים בתיק'); return false; }
+        }
+        return true;
+      });
+      if (!ok) return;
+      const f = Storage.getById(Storage.KEYS.PRISONER_FILES, fid);
+      const rec = { id: 'rec_' + Utils.generateId() };
+      cfg.fields.forEach(fl => { rec[fl[0]] = Utils.el('rf-' + fl[0]).value.trim(); });
+      f[cfg.list] = (f[cfg.list] || []).concat([rec]);
+      f.updatedAt = new Date().toISOString(); Storage.upsert(Storage.KEYS.PRISONER_FILES, f);
+      Audit.log({ module: 'incarceration', action: 'update', entityType: 'prisonerFile', entityId: fid, description: cfg.audit + ' — תיק ' + (f.fileNumber || f.id) });
+      Modal.close(); Toast.success('נשמר'); window._pfTab = cfg.tab; Router.navigate('/prisoner-file', { id: fid });
+    };
+  };
+  window.pfDelRecord = async (fid, list, id) => {
+    const ok = await Modal.confirm({ title: 'מחיקת רשומה', message: 'למחוק את הרשומה מהתיק?', type: 'danger' });
+    if (!ok) return;
+    const f = Storage.getById(Storage.KEYS.PRISONER_FILES, fid);
+    f[list] = (f[list] || []).filter(r => r.id !== id);
+    if (list === 'depositBags') f.depositItems = (f.depositItems || []).filter(i => i.bagId !== id);
+    Storage.upsert(Storage.KEYS.PRISONER_FILES, f);
+    window._pfTab = list === 'depositBags' ? 'deposits' : (RECORD_FORMS[list] || {}).tab || 'general'; Router.navigate('/prisoner-file', { id: fid });
+  };
+
+  function addBtn(fid, key, label) { return canEdit ? `<button class="btn btn-secondary btn-sm" onclick="window.pfRecordForm('${fid}','${key}')">${Utils.icon('plus', 14)} ${label}</button>` : ''; }
+  function delBtn(fid, list, id) { return canEdit ? `<button class="row-action-btn danger" title="מחיקה" onclick="window.pfDelRecord('${fid}','${list}','${id}')">${Utils.icon('trash', 13)}</button>` : ''; }
+  function simpleTable(file, list, head, rowFn, empty, esc) {
+    const arr = file[list] || [];
+    return arr.length === 0 ? `<div class="empty-state-desc">${empty}</div>` : `<table class="data-table"><thead><tr>${head.map(h => `<th>${h}</th>`).join('')}<th></th></tr></thead><tbody>${arr.map(r => `<tr>${rowFn(r).map(c => `<td>${c}</td>`).join('')}<td>${r.id ? delBtn(file.id, list, r.id) : ''}</td></tr>`).join('')}</tbody></table>`;
+  }
+  function card(title, actions, body) { return `<div class="card"><div class="card-header"><div class="card-title">${title}</div>${actions}</div><div class="card-body">${body}</div></div>`; }
+
+  function renderPrisonerRestrictions(file, esc, fd) {
+    return card('הגבלות', addBtn(file.id, 'restrictions', 'הוסף הגבלה'),
+      simpleTable(file, 'restrictions', ['סוג', 'מתאריך', 'עד תאריך', 'סיבה'], r => [esc(r.type), fd(r.from), fd(r.to), esc(r.reason)], 'אין הגבלות מיוחדות.', esc));
+  }
   function renderPrisonerHealth(file, esc, fd) {
     const h = file.health || {};
     return `
@@ -423,27 +536,9 @@ Pages['prisoner-file'] = function(query) {
   }
 
   function renderPrisonerVisits(file, esc, fd) {
-    const visits = file.visits || [];
-    return `
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title">ביקורים</div>
-          ${canEdit ? `<button class="btn btn-secondary btn-sm" onclick="Toast.info('רישום ביקור בפיתוח')">רשום ביקור</button>` : ''}
-        </div>
-        <div class="card-body">
-          ${visits.length === 0 ? '<div class="empty-state-desc">אין ביקורים מתועדים.</div>' : `
-            <table class="data-table">
-              <thead><tr><th>תאריך</th><th>שעה</th><th>מבקר</th><th>קשר</th><th>אורך</th></tr></thead>
-              <tbody>
-                ${visits.map(v => `<tr><td>${fd(v.date)}</td><td>${esc(v.time)}</td><td>${esc(v.visitorName)}</td><td>${esc(v.relation)}</td><td>${esc(v.duration)}</td></tr>`).join('')}
-              </tbody>
-            </table>
-          `}
-        </div>
-      </div>
-    `;
+    return card('ביקורים', addBtn(file.id, 'visits', 'רשום ביקור'),
+      simpleTable(file, 'visits', ['תאריך', 'שעה', 'מבקר', 'קשר', 'משך (דק׳)', 'הערות'], r => [fd(r.date), esc(r.time), esc(r.visitorName), esc(r.relation), esc(r.duration), esc(r.notes)], 'אין ביקורים מתועדים.', esc));
   }
-
   function renderPrisonerDisciplines(file, esc, fd) {
     const disc = file.disciplines || [];
     return `
@@ -542,121 +637,158 @@ Pages['prisoner-file'] = function(query) {
   }
 
   function renderPrisonerDeposits(file, esc, fd) {
-    const deposits = file.deposits || [];
+    const bags = file.depositBags || [];
+    const items = file.depositItems || [];
+    const sel = window._pfDepBag && bags.some(b => b.id === window._pfDepBag) ? window._pfDepBag : '';
+    const shown = sel ? items.filter(i => i.bagId === sel) : items;
+    const bagNo = id => (bags.find(b => b.id === id) || {}).number || '—';
+    const legacy = file.deposits || [];
     return `
-      <div class="card">
-        <div class="card-header"><div class="card-title">פקדונות</div></div>
-        <div class="card-body">
-          ${deposits.length === 0 ? '<div class="empty-state-desc">אין פקדונות רשומים.</div>' : `
-            <table class="data-table">
-              <thead><tr><th>תאריך</th><th>פריט</th><th>ערך / כמות</th><th>מיקום אחסון</th><th>הוחזר</th></tr></thead>
-              <tbody>
-                ${deposits.map(d => `<tr><td>${fd(d.date)}</td><td>${esc(d.item)}</td><td>${esc(d.value)}</td><td>${esc(d.storageLocation)}</td><td>${d.returned ? 'כן' : 'לא'}</td></tr>`).join('')}
-              </tbody>
-            </table>
-          `}
-        </div>
-      </div>
-    `;
+      ${card('שקיות', addBtn(file.id, 'depositBags', 'הוסף שקית'), bags.length === 0 ? '<div class="empty-state-desc">אין שקיות פקדון. לחץ על "הוסף שקית".</div>' : `
+        <table class="data-table"><thead><tr><th>מספר שקית</th><th>סטטוס שקית</th><th>מקבל</th><th>תאריך ושעה</th><th>הערות</th><th>פריטים</th><th></th></tr></thead><tbody>
+        ${bags.map(b => `<tr style="cursor:pointer" class="${sel === b.id ? 'row-selected' : ''}" onclick="window.pfDepositBag('${file.id}','${b.id}')"><td>${esc(b.number)}</td><td>${esc(b.status)}</td><td>${esc(b.receiver)}</td><td>${fd(b.date)} ${esc(b.time)}</td><td>${esc(b.notes)}</td><td>${items.filter(i => i.bagId === b.id).length}</td><td>${delBtn(file.id, 'depositBags', b.id)}</td></tr>`).join('')}
+        </tbody></table>`)}
+      <div style="height:12px"></div>
+      ${card('פריטי פקדון' + (sel ? ' — שקית ' + esc(bagNo(sel)) : ' — כל הפקדונות'),
+        canEdit ? `<span style="display:flex;gap:6px">${sel ? `<button class="btn btn-ghost btn-sm" onclick="window.pfDepositBag('${file.id}','')">הצג הכל</button>` : ''}<button class="btn btn-secondary btn-sm" onclick="window.pfAddDepositItem('${file.id}')">${Utils.icon('plus', 14)} הוסף פריט</button></span>` : '',
+        shown.length === 0 ? '<div class="empty-state-desc">אין פריטי פקדון.</div>' : `
+        <table class="data-table"><thead><tr><th>שקית</th><th>סוג פקדון</th><th>פריט</th><th>הערות / תיאור</th><th>מקבל</th><th>תאריך ושעה</th><th></th></tr></thead><tbody>
+        ${shown.map(i => `<tr><td>${esc(bagNo(i.bagId))}</td><td>${esc(i.type)}</td><td>${esc(i.item)}</td><td>${esc(i.description)}</td><td>${esc(i.receiver)}</td><td>${fd(i.date)} ${esc(i.time)}</td><td>${delBtn(file.id, 'depositItems', i.id)}</td></tr>`).join('')}
+        </tbody></table>`)}
+      ${legacy.length ? `<div style="height:12px"></div>${card('פקדונות קודמים (רשומות ישנות)', '', `<table class="data-table"><thead><tr><th>תאריך</th><th>פריט</th><th>ערך / כמות</th><th>מיקום אחסון</th><th>הוחזר</th></tr></thead><tbody>${legacy.map(d => `<tr><td>${fd(d.date)}</td><td>${esc(d.item)}</td><td>${esc(d.value)}</td><td>${esc(d.storageLocation)}</td><td>${d.returned ? 'כן' : 'לא'}</td></tr>`).join('')}</tbody></table>`)}` : ''}`;
   }
-
+  window.pfDepositBag = (fid, bagId) => { window._pfDepBag = bagId; window._pfTab = 'deposits'; Router.navigate('/prisoner-file', { id: fid }); };
+  window.pfAddDepositItem = (fid) => {
+    const f = Storage.getById(Storage.KEYS.PRISONER_FILES, fid);
+    const bags = f.depositBags || [];
+    if (!bags.length) { Toast.error('יש להוסיף שקית לפני הוספת פריט'); return; }
+    const fields = [['bagId', 'שקית', 'select', true, bags.map(b => String(b.number))], ['type', 'סוג פקדון', 'select', true, DEPOSIT_TYPES], ['item', 'פריט', 'text', true], ['description', 'הערות / תיאור', 'text', false], ['receiver', 'מקבל', 'text', true], ['date', 'תאריך', 'date', true, 'today'], ['time', 'שעה', 'time', true]];
+    Modal.open({ title: 'פריט פקדון חדש', body: `<div class="form-row form-row-2">${fields.map(fl => fieldHtml('di-' + fl[0], fl, fl[0] === 'bagId' && window._pfDepBag ? String((bags.find(b => b.id === window._pfDepBag) || {}).number || '') : null)).join('')}</div>`,
+      footer: `<button class="btn btn-secondary" onclick="Modal.close()">ביטול</button><button class="btn btn-primary" id="di-save">שמור</button>` });
+    Utils.el('di-save').onclick = () => {
+      if (!validateFields(fields, 'di-')) return;
+      const bag = bags.find(b => String(b.number) === Utils.el('di-bagId').value);
+      const rec = { id: 'rec_' + Utils.generateId(), bagId: bag.id };
+      fields.slice(1).forEach(fl => { rec[fl[0]] = Utils.el('di-' + fl[0]).value.trim(); });
+      f.depositItems = (f.depositItems || []).concat([rec]); Storage.upsert(Storage.KEYS.PRISONER_FILES, f);
+      Audit.log({ module: 'incarceration', action: 'update', entityType: 'prisonerFile', entityId: fid, description: 'הוספת פריט פקדון' });
+      Modal.close(); Toast.success('נשמר'); window._pfTab = 'deposits'; Router.navigate('/prisoner-file', { id: fid });
+    };
+  };
   function renderPrisonerRequests(file, esc, fd) {
-    const requests = file.requests || [];
-    return `
-      <div class="card">
-        <div class="card-header"><div class="card-title">בקשות</div></div>
-        <div class="card-body">
-          ${requests.length === 0 ? '<div class="empty-state-desc">אין בקשות מתועדות.</div>' : `
-            <table class="data-table">
-              <thead><tr><th>תאריך</th><th>נושא</th><th>סטטוס</th><th>תגובה</th></tr></thead>
-              <tbody>
-                ${requests.map(r => `<tr><td>${fd(r.date)}</td><td>${esc(r.subject)}</td><td>${StatusBadge.render(r.status)}</td><td>${esc(r.response)}</td></tr>`).join('')}
-              </tbody>
-            </table>
-          `}
-        </div>
-      </div>
-    `;
+    return card('בקשות', addBtn(file.id, 'requests', 'בקשה חדשה'),
+      simpleTable(file, 'requests', ['תאריך', 'סוג הבקשה', 'סטטוס טיפול', 'כמות ימים', 'תגובה'], r => [fd(r.date), esc(r.subject), esc(r.status), esc(r.days), esc(r.response)], 'אין בקשות מתועדות.', esc));
   }
-
   function renderPrisonerInterviews(file, esc, fd) {
-    const interviews = file.interviews || [];
-    return `
-      <div class="card">
-        <div class="card-header"><div class="card-title">ראיונות</div></div>
-        <div class="card-body">
-          ${interviews.length === 0 ? '<div class="empty-state-desc">אין ראיונות מתועדים.</div>' : `
-            <table class="data-table">
-              <thead><tr><th>תאריך</th><th>מראיין</th><th>נושא</th><th>סיכום</th></tr></thead>
-              <tbody>
-                ${interviews.map(i => `<tr><td>${fd(i.date)}</td><td>${esc(i.interviewer)}</td><td>${esc(i.subject)}</td><td>${Utils.truncate(i.summary || '', 50)}</td></tr>`).join('')}
-              </tbody>
-            </table>
-          `}
-        </div>
-      </div>
-    `;
+    return card('ראיונות', addBtn(file.id, 'interviews', 'ראיון חדש'),
+      simpleTable(file, 'interviews', ['תאריך', 'מראיין', 'נושא', 'סיכום'], r => [fd(r.date), esc(r.interviewer), esc(r.subject), Utils.escHtml(Utils.truncate(r.summary || '', 60))], 'אין ראיונות מתועדים.', esc));
   }
-
   function renderPrisonerPhoneCalls(file, esc, fd) {
-    const calls = file.phoneCalls || [];
-    return `
-      <div class="card">
-        <div class="card-header"><div class="card-title">שיחות טלפון</div></div>
-        <div class="card-body">
-          ${calls.length === 0 ? '<div class="empty-state-desc">אין שיחות טלפון מתועדות.</div>' : `
-            <table class="data-table">
-              <thead><tr><th>תאריך</th><th>שעה</th><th>איש קשר</th><th>משך</th></tr></thead>
-              <tbody>
-                ${calls.map(c => `<tr><td>${fd(c.date)}</td><td>${esc(c.time)}</td><td>${esc(c.contact)}</td><td>${esc(c.duration)}</td></tr>`).join('')}
-              </tbody>
-            </table>
-          `}
-        </div>
-      </div>
-    `;
+    return card('שיחות טלפון', addBtn(file.id, 'phoneCalls', 'שיחה חדשה'),
+      simpleTable(file, 'phoneCalls', ['תאריך', 'שעה', 'איש קשר / מספר', 'משך (דק׳)'], r => [fd(r.date), esc(r.time), esc(r.contact), esc(r.duration)], 'אין שיחות טלפון מתועדות.', esc));
   }
-
   function renderPrisonerReleases(file, esc, fd) {
     const r = file.release || {};
+    const active = file.status === 'active';
+    const t = file.transfer, po = file.placementOrder;
     return `
       <div class="card">
         <div class="card-header"><div class="card-title">סיום מעצר</div>
-          ${canEdit ? `<button class="btn btn-secondary btn-sm" onclick="window.editRelease('${file.id}')">${Utils.icon('edit', 14)} עדכון</button>` : ''}</div>
+          ${canEdit ? `<span style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn btn-secondary btn-sm" onclick="window.editRelease('${file.id}')">${Utils.icon('edit', 14)} עדכון פרטי שחרור</button>
+            ${active ? `<button class="btn btn-primary btn-sm" onclick="window.editRelease('${file.id}', true)">סיום מעצר</button>
+            <button class="btn btn-secondary btn-sm" onclick="window.pfTransferBase('${file.id}')">העברה לבס"כ אחר</button>` : ''}
+            <button class="btn btn-secondary btn-sm" onclick="window.pfPlacementOrder('${file.id}')">צו הצבה / סיפוח</button>
+            <button class="btn btn-secondary btn-sm" onclick="window.pfThirdUpdate('${file.id}')">עדכון פרטי שליש</button></span>` : ''}</div>
         <div class="card-body">
           <div class="info-list">
+            ${infoRow('סטטוס תיק', StatusBadge.render(file.status))}
             ${infoRow('שחרור צפוי', fd(file.expectedRelease))}
             ${infoRow('שחרור בפועל', fd(file.actualRelease))}
             ${infoRow('קוד סיבת שחרור', esc(r.reasonCode))}
             ${infoRow('סיבת שחרור', esc(r.reason || file.releaseType))}
             ${infoRow('שם מאשר עזיבה', esc(r.approver || file.releasingOfficer))}
+            ${infoRow('קוד יחידה', esc(r.unitCode))}
             ${infoRow('יחידת שחרור', esc(r.unit))}
             ${infoRow('תאריך / שעת עזיבה', r.leaveDate ? fd(r.leaveDate) + ' ' + esc(r.leaveTime) : '—')}
             ${infoRow('תאריך / שעת התייצבות', r.appearDate ? fd(r.appearDate) + ' ' + esc(r.appearTime) : '—')}
             ${infoRow('הערות', esc(r.notes || file.releaseConditions))}
+            ${t ? infoRow('הועבר לבס"כ', esc(t.baseName) + ' · ' + fd(t.date) + ' · ' + esc(t.reason)) : ''}
+            ${po ? infoRow('צו הצבה / סיפוח', esc(po.number) + ' · ' + fd(po.date) + ' · ' + esc(po.unitName)) : ''}
           </div>
         </div>
       </div>
     `;
   }
-  window.editRelease = (fid) => {
+  const RELEASE_FIELDS = [
+    ['reasonCode', 'קוד סיבת שחרור', 'text', false], ['reason', 'סיבת שחרור', 'text', true], ['approver', 'שם מאשר עזיבה', 'text', false],
+    ['unitCode', 'קוד יחידה', 'text', false], ['unit', 'יחידת שחרור', 'text', false],
+    ['leaveDate', 'תאריך עזיבה', 'date', true], ['leaveTime', 'שעת עזיבה', 'time', true],
+    ['appearDate', 'תאריך התייצבות', 'date', false], ['appearTime', 'שעת התייצבות', 'time', false], ['notes', 'הערות', 'text', false]];
+  // finalize=true also closes the detention (status → released) — only after the release data validates
+  window.editRelease = (fid, finalize) => {
     const f = Storage.getById(Storage.KEYS.PRISONER_FILES, fid); const r = f.release || {};
-    const fld = (id, l, t, v) => `<div class="form-group"><label class="form-label">${l}</label><input id="${id}" type="${t || 'text'}" class="form-control" value="${Utils.escHtml(v || '')}"></div>`;
     Modal.open({
-      title: 'סיום מעצר',
-      body: `<div class="form-row form-row-2">${fld('rl-code', 'קוד סיבת שחרור', 'text', r.reasonCode)}${fld('rl-reason', 'סיבת שחרור', 'text', r.reason)}${fld('rl-approver', 'שם מאשר עזיבה', 'text', r.approver)}${fld('rl-unit', 'יחידת שחרור', 'text', r.unit)}
-        ${fld('rl-ld', 'תאריך עזיבה', 'date', r.leaveDate)}${fld('rl-lt', 'שעה', 'time', r.leaveTime)}${fld('rl-ad', 'תאריך התייצבות', 'date', r.appearDate)}${fld('rl-at', 'שעה', 'time', r.appearTime)}</div>
-        ${fld('rl-notes', 'הערות', 'text', r.notes)}`,
-      footer: `<button class="btn btn-secondary" onclick="Modal.close()">ביטול</button><button class="btn btn-primary" id="rl-save">שמור</button>`,
+      title: finalize ? 'סיום מעצר — שחרור' : 'עדכון פרטי שחרור',
+      body: `<div class="form-row form-row-2">${RELEASE_FIELDS.map(fl => fieldHtml('rl-' + fl[0], fl, r[fl[0]] || '')).join('')}</div>`,
+      footer: `<button class="btn btn-secondary" onclick="Modal.close()">ביטול</button><button class="btn btn-primary" id="rl-save">${finalize ? 'סיים מעצר ושחרר' : 'שמור'}</button>`,
     });
-    Utils.el('rl-save').onclick = () => {
-      const v = id => Utils.el(id).value.trim();
-      f.release = { reasonCode: v('rl-code'), reason: v('rl-reason'), approver: v('rl-approver'), unit: v('rl-unit'), leaveDate: v('rl-ld'), leaveTime: v('rl-lt'), appearDate: v('rl-ad'), appearTime: v('rl-at'), notes: v('rl-notes') };
+    Utils.el('rl-save').onclick = async () => {
+      if (!validateFields(RELEASE_FIELDS, 'rl-', () => {
+        const ap = Utils.el('rl-appearDate').value, at = Utils.el('rl-appearTime').value;
+        if ((ap && !at) || (!ap && at)) { Toast.error('יש להזין תאריך ושעת התייצבות יחד'); return false; }
+        return true;
+      })) return;
+      const rel = {}; RELEASE_FIELDS.forEach(fl => { rel[fl[0]] = Utils.el('rl-' + fl[0]).value.trim(); });
+      f.release = rel;
+      if (finalize) {
+        Modal.close();
+        const ok = await Modal.confirm({ title: 'שחרור כלוא', message: 'לסיים את המעצר ולסמן את הכלוא כמשוחרר?', type: 'warning', confirmLabel: 'שחרר' });
+        if (!ok) return;
+        f.status = 'released'; f.actualRelease = rel.leaveDate; f.releaseType = rel.reason;
+      }
       f.updatedAt = new Date().toISOString(); Storage.upsert(Storage.KEYS.PRISONER_FILES, f);
-      Audit.log({ module: 'incarceration', action: 'update', entityType: 'prisonerFile', entityId: fid, description: 'עדכון סיום מעצר' });
-      Modal.close(); Router.navigate('/prisoner-file', { id: fid });
+      Audit.log({ module: 'incarceration', action: finalize ? 'release' : 'update', entityType: 'prisonerFile', entityId: fid, description: (finalize ? 'שחרור כלוא ' : 'עדכון סיום מעצר ') + (f.fileNumber || '') });
+      if (!finalize) Modal.close();
+      Toast.success(finalize ? 'הכלוא שוחרר' : 'נשמר'); window._pfTab = 'releases'; Router.navigate('/prisoner-file', { id: fid });
     };
   };
+  window.pfTransferBase = (fid) => {
+    const f = Storage.getById(Storage.KEYS.PRISONER_FILES, fid);
+    const fields = [['baseId', 'בסיס יעד', 'select', true, DEMO_BASES.filter(b => b.id !== f.baseId).map(b => b.shortName)], ['date', 'תאריך העברה', 'date', true, 'today'], ['reason', 'סיבת העברה', 'text', true]];
+    Modal.open({ title: 'העברה לבס"כ אחר', body: `<div class="form-row form-row-2">${fields.map(fl => fieldHtml('tb-' + fl[0], fl)).join('')}</div>`,
+      footer: `<button class="btn btn-secondary" onclick="Modal.close()">ביטול</button><button class="btn btn-primary" id="tb-save">העבר</button>` });
+    Utils.el('tb-save').onclick = async () => {
+      if (!validateFields(fields, 'tb-')) return;
+      const base = DEMO_BASES.find(b => b.shortName === Utils.el('tb-baseId').value);
+      const tDate = Utils.el('tb-date').value, tReason = Utils.el('tb-reason').value.trim();
+      Modal.close();
+      const ok = await Modal.confirm({ title: 'העברת כלוא', message: 'להעביר את הכלוא לבסיס ' + base.shortName + '? התיק יסומן כ"הועבר".', type: 'warning', confirmLabel: 'העבר' });
+      if (!ok) return;
+      f.transfer = { baseId: base.id, baseName: base.shortName, date: tDate, reason: tReason };
+      f.status = 'transferred';
+      Storage.upsert(Storage.KEYS.PRISONER_FILES, f);
+      Audit.log({ module: 'incarceration', action: 'update', entityType: 'prisonerFile', entityId: fid, description: 'העברה לבס"כ ' + base.shortName });
+      Toast.success('הכלוא הועבר'); window._pfTab = 'releases'; Router.navigate('/prisoner-file', { id: fid });
+    };
+  };
+  window.pfPlacementOrder = (fid) => {
+    const f = Storage.getById(Storage.KEYS.PRISONER_FILES, fid);
+    const po = f.placementOrder || {};
+    const units = DEMO_UNITS.filter(u => u.type !== 'canteen');
+    const fields = [['number', 'מספר צו', 'text', true], ['date', 'תאריך צו', 'date', true, 'today'], ['unitName', 'יחידה מקבלת', 'select', true, units.map(u => u.name)], ['notes', 'הערות', 'text', false]];
+    Modal.open({ title: 'צו הצבה / סיפוח', body: `<div class="form-row form-row-2">${fields.map(fl => fieldHtml('po-' + fl[0], fl, po[fl[0]] || null)).join('')}</div>`,
+      footer: `<button class="btn btn-secondary" onclick="Modal.close()">ביטול</button><button class="btn btn-primary" id="po-save">שמור</button>` });
+    Utils.el('po-save').onclick = () => {
+      if (!validateFields(fields, 'po-')) return;
+      const o = {}; fields.forEach(fl => { o[fl[0]] = Utils.el('po-' + fl[0]).value.trim(); });
+      f.placementOrder = o; Storage.upsert(Storage.KEYS.PRISONER_FILES, f);
+      Audit.log({ module: 'incarceration', action: 'update', entityType: 'prisonerFile', entityId: fid, description: 'צו הצבה / סיפוח ' + o.number });
+      Modal.close(); Toast.success('נשמר'); window._pfTab = 'releases'; Router.navigate('/prisoner-file', { id: fid });
+    };
+  };
+  // "עדכון פרטי שליש" = record a reduction event on the sentence calculation
+  window.pfThirdUpdate = (fid) => { window.addSentenceEvent(fid); if (Utils.el('se-kind')) Utils.el('se-kind').value = 'reduction'; };
 
   // ---------- חישוב עונש ----------
   function calcSummary(file) {
@@ -849,7 +981,7 @@ Pages['prisoner-file'] = function(query) {
       body: `
         <div class="form-row form-row-2">
           <div class="form-group">
-            <label class="form-label">תאריך</label>
+            <label class="form-label">תאריך <span class="required">*</span></label>
             <input type="date" id="beh-date" class="form-control" value="${Utils.today()}">
           </div>
           <div class="form-group">
@@ -860,7 +992,7 @@ Pages['prisoner-file'] = function(query) {
           </div>
         </div>
         <div class="form-group">
-          <label class="form-label">תיאור</label>
+          <label class="form-label">תיאור <span class="required">*</span></label>
           <textarea id="beh-desc" class="form-control" rows="3"></textarea>
         </div>
       `,
@@ -872,6 +1004,7 @@ Pages['prisoner-file'] = function(query) {
     window._saveBehavior = (fid) => {
       const ff = Storage.getById(Storage.KEYS.PRISONER_FILES, fid);
       if (!ff) return;
+      if (!Utils.el('beh-date').value || !Utils.el('beh-desc').value.trim()) { Toast.error('יש למלא תאריך ותיאור'); return; }
       if (!ff.behaviorLog) ff.behaviorLog = [];
       const u = Auth.getCurrentUser();
       ff.behaviorLog.push({ date: Utils.el('beh-date').value, type: Utils.el('beh-type').value, description: Utils.el('beh-desc').value, reporter: u ? u.firstName + ' ' + u.lastName : '' });
@@ -880,6 +1013,7 @@ Pages['prisoner-file'] = function(query) {
       Audit.log({ module: 'incarceration', action: 'update', entityType: 'prisonerFile', entityId: fid, description: `רשומת התנהגות לתיק ${ff.fileNumber}` });
       Modal.close();
       Toast.success('הרשומה נשמרה');
+      window._pfTab = 'behavior';
       Router.navigate('/prisoner-file', { id: fid });
     };
   };
