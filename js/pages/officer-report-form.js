@@ -303,8 +303,8 @@ Pages['officer-report-form'] = function(query) {
     `;
   }
 
-  const DELIVERY_LABEL = Object.fromEntries((window.DELIVERY_METHODS || []).map(d => [d.id, d.label]));
   function renderTabDetails() {
+    const DELIVERY_LABEL = Object.fromEntries((window.DELIVERY_METHODS || []).map(d => [d.id, d.label]));
     const d = report.delivery || {};
     const L = report.locationDetails || {};
     const locRows = L.type === 'junction' ? [['סוג מיקום', 'צומת'], ['צומת', L.junction], ['מכיוון', L.from], ['לכיוון', L.to], ['לפני / אחרי הצומת (מטרים)', L.meters]]
