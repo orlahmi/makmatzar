@@ -727,10 +727,10 @@ Pages['service-work-prisoner-file'] = function(query) {
 
   // ─── list view ───────────────────────────────────────────────────────────────
   function renderList() {
-    const getData = () => Storage.getCollection(Storage.KEYS.SERVICE_WORK_FILES).sort((a,b)=>(b.startDate||'').localeCompare(a.startDate||''));
+    const getData = () => Storage.getCollection(Storage.KEYS.SERVICE_WORK_FILES).map(f => Object.assign({}, f, { startDate: f.startDate || f.sentenceStart, fileNumber: f.fileNumber || ('SW-' + String(f.id).replace(/\D/g, '').padStart(5, '0')), workType: f.workType || '—' })).sort((a,b)=>(b.startDate||'').localeCompare(a.startDate||''));
     content.innerHTML = `
       <div class="page-wrapper">
-        ${Utils.pageHeader('גחל"ת — עבודת שירות', Utils.pageMeta())}
+        ${Utils.pageHeader('גחל"ת עובדי שירות', Utils.pageMeta())}
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
           ${canEdit ? `<button class="btn btn-primary" id="btn-new">${Utils.icon('plus', 14)} תיק חדש</button>` : ''}
         </div>
@@ -757,60 +757,123 @@ Pages['service-work-prisoner-file'] = function(query) {
     if (Utils.el('btn-new')) Utils.el('btn-new').onclick = () => Router.navigate('/service-work-prisoner-file', { new: 1 });
   }
 
-  // ─── full-page new-file entry screen ────────────────────────────────────────
+  // ─── full-page new-file entry screen (all initial file data in one place) ────
   function renderNewFilePage() {
+    const inp = (id, label, extra, req) => `<div class="form-group"><label class="form-label">${label}${req ? ' <span class="required">*</span>' : ''}</label><input id="${id}" class="form-control" ${extra || ''}></div>`;
+    const sel = (id, label, opts, req) => `<div class="form-group"><label class="form-label">${label}${req ? ' <span class="required">*</span>' : ''}</label><select id="${id}" class="form-control"><option value="">בחר</option>${opts.map(o => `<option>${o}</option>`).join('')}</select></div>`;
+    const section = (title, icon, body) => `<div class="page-section"><div class="section-header"><div class="section-title">${Utils.icon(icon, 18)} ${title}</div></div>${body}</div>`;
+    const units = DEMO_UNITS.filter(u => u.type !== 'canteen');
+
     content.innerHTML = `
       <div class="page-wrapper">
-        ${Utils.pageHeader('תיק גחל"ת חדש', Utils.pageMeta())}
+        ${Utils.pageHeader('פתיחת תיק גחל"ת עובדי שירות', Utils.pageMeta())}
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+          <span style="font-size:12px;color:var(--color-text-muted)"><span class="required">*</span> שדות חובה — שאר הפרטים ניתנים להשלמה בתיק לאחר היצירה</span>
           <button class="btn btn-secondary" style="margin-right:auto" onclick="Router.navigate('/service-work-prisoner-file')">ביטול</button>
-          <button class="btn btn-primary" id="sw-save-btn">צור תיק</button>
+          <button class="btn btn-primary" id="sw-save-btn">צור תיק ופתח</button>
         </div>
-        <form id="sw-new-form">
-          <div class="page-section">
-            <div class="section-header"><div class="section-title">${Utils.icon('user', 18)} פרטי התיק</div></div>
+        <form id="sw-new-form" novalidate>
+          ${section('פרטים אישיים', 'user', `
             <div class="form-row form-row-3">
-              <div class="form-group">
-                <label class="form-label">אדם <span class="required">*</span></label>
-                <select name="personId" id="sw-person" class="form-control" required>
-                  <option value="">בחר אדם</option>
-                  ${people.map(p => `<option value="${p.id}">${Utils.escHtml(p.firstName + ' ' + p.lastName + ' — ' + p.militaryNumber)}</option>`).join('')}
-                </select>
-              </div>
-              <div class="form-group">
-                <label class="form-label">סוג עבודה</label>
-                <select name="workType" id="sw-type" class="form-control">
-                  <option>עבודת שירות</option><option>ניקיון</option><option>גינון</option><option>לוגיסטיקה</option><option>שמירה</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label class="form-label">תאריך התחלה</label>
-                <input type="date" name="startDate" id="sw-start" class="form-control" value="${Utils.today()}">
-              </div>
-              <div class="form-group">
-                <label class="form-label">ימי עונש</label>
-                <input type="number" name="days" id="sw-days" class="form-control" value="30" min="1">
-              </div>
-            </div>
-          </div>
+              <div class="form-group"><label class="form-label">מספר אישי <span class="required">*</span></label>
+                <div style="display:flex;gap:6px"><input id="sw-mil" class="form-control"><button type="button" class="btn btn-secondary btn-sm" id="sw-lookup">${Utils.icon('search', 13)}</button></div></div>
+              ${inp('sw-first', 'שם פרטי', 'readonly')}${inp('sw-last', 'שם משפחה', 'readonly')}
+              ${inp('sw-rank', 'דרגה', 'readonly')}${inp('sw-id', 'תעודת זהות (ת.ז)')}${inp('sw-age', 'גיל', 'type="number" min="18" max="60"')}
+              ${sel('sw-marital', 'מצב משפחתי', ['רווק', 'נשוי', 'גרוש', 'אלמן'])}${inp('sw-edu', 'שנות לימוד', 'type="number" min="0" max="25"')}
+            </div>`)}
+          ${section('שיבוץ, כתובת ותפקיד', 'report', `
+            <div class="form-row form-row-3">
+              <div class="form-group"><label class="form-label">יחידה מעסיקה <span class="required">*</span></label>
+                <select id="sw-unit" class="form-control"><option value="">בחר יחידה</option>${units.map(u => `<option value="${u.id}">${Utils.escHtml(u.name)}</option>`).join('')}</select></div>
+              ${inp('sw-supervisor', 'מפקד / אחראי')}${inp('sw-addr', 'כתובת אזרחית', 'placeholder="רחוב, עיר"')}
+              ${inp('sw-mast', 'מס״ט')}${inp('sw-role', 'תפקיד צבאי / מקצוע')}
+              ${sel('sw-worktype', 'סוג עבודה', ['עבודת שירות', 'ניקיון', 'גינון', 'לוגיסטיקה', 'שמירה'])}
+            </div>`)}
+          ${section('רפואה, פרופיל ואבחון', 'alert', `
+            <div class="form-row form-row-3">
+              ${inp('sw-profile', 'פרופיל', 'placeholder="97"')}${sel('sw-tavan', 'טב״ן שלילי', ['כן', 'לא'])}${inp('sw-dfar', 'דפ״ר')}
+              <div class="form-group" style="grid-column:1/-1"><label class="form-label">אינדיקציות</label><textarea id="sw-ind" class="form-control" rows="2"></textarea></div>
+            </div>`)}
+          ${section('העבירה והעונש', 'alert', `
+            <div class="form-row form-row-3">
+              ${inp('sw-off-details', 'פרטי עבירה', '', true)}
+              <div class="form-group"><label class="form-label">סוג עבירה <span class="required">*</span></label>
+                <select id="sw-off-type" class="form-control"><option value="">בחר</option>${['אי ציות', 'עריקות', 'תקיפה', 'הפרת משמעת', 'אחר'].map(o => `<option>${o}</option>`).join('')}</select></div>
+              ${sel('sw-off-punish', 'סוג עונש', ['כליאה ממשית', 'עבודות שירות', 'על תנאי', 'קנס', 'אחר'])}
+              ${inp('sw-off-actual', 'כליאה ממשית (ימים)', 'type="number" min="0" value="0"')}${inp('sw-off-work', 'עבודות צבאיות (ימים)', 'type="number" min="0" value="0"')}
+            </div>`)}
+          ${section('הליך משפטי וליווי', 'report', `
+            <div class="form-row form-row-3">
+              ${inp('sw-atty', 'פרטי סנגור')}${inp('sw-swdate', 'חו״ד מטפל – תאריך', 'type="date"')}${inp('sw-bda', 'בד״א')}
+              ${inp('sw-case', 'מספר תיק')}${inp('sw-verdict', 'תאריך פס״ד', 'type="date"')}
+            </div>`)}
+          ${section('חישוב עונש (נתוני פתיחה)', 'calendar', `
+            <div class="form-row form-row-3">
+              ${inp('sw-start', 'תאריך תחילת ריצוי', `type="date" value="${Utils.today()}"`, true)}${inp('sw-months', 'חודשים', 'type="number" min="0" value="0"')}${inp('sw-days', 'ימים', 'type="number" min="0" value="30"')}
+              ${inp('sw-vac', 'חופשות (ימים)', 'type="number" min="0" value="0"')}${inp('sw-ill', 'מחלה (ימים)', 'type="number" min="0" value="0"')}
+            </div>`)}
+          <div id="sw-errors" class="form-error-summary" style="display:none"></div>
         </form>
         ${Utils.classificationFooter()}
       </div>
     `;
 
-    Utils.el('sw-save-btn').onclick = () => {
-      const personId = Utils.el('sw-person').value;
-      if (!personId) { Toast.error('יש לבחור אדם'); Utils.el('sw-person').focus(); return; }
-      const days = parseInt(Utils.el('sw-days').value) || 30;
-      const start = Utils.el('sw-start').value || Utils.today();
-      const endD = new Date(start + 'T00:00:00'); endD.setDate(endD.getDate() + days);
+    let person = null;
+    const $ = id => Utils.el(id);
+    $('sw-lookup').onclick = () => {
+      const mil = $('sw-mil').value.trim();
+      person = people.find(p => p.militaryNumber === mil) || null;
+      if (!person) { Toast.error('לא נמצא אדם עם מספר אישי זה'); return; }
+      const open = Storage.getCollection(Storage.KEYS.SERVICE_WORK_FILES).find(f => f.personId === person.id && f.status === 'active');
+      if (open) { Toast.error('לאדם זה כבר קיים תיק גחל"ת פעיל'); person = null; return; }
+      $('sw-first').value = person.firstName; $('sw-last').value = person.lastName;
+      $('sw-rank').value = (RANK_MAP[person.rank] || {}).label || '';
+      $('sw-id').value = person.nationalId || '';
+      if (person.birthDate) $('sw-age').value = Math.max(18, new Date().getFullYear() - new Date(person.birthDate).getFullYear());
+      if (person.address) $('sw-addr').value = person.address;
+      if (person.unitId) $('sw-unit').value = person.unitId;
+    };
+
+    $('sw-save-btn').onclick = () => {
+      const errs = [];
+      const need = (id, label) => { if (!$(id).value.trim()) { errs.push(label); $(id).style.borderColor = 'var(--color-danger)'; } else $(id).style.borderColor = ''; };
+      if (!person) errs.push('יש לאתר אדם לפי מספר אישי');
+      need('sw-unit', 'יחידה מעסיקה'); need('sw-off-details', 'פרטי עבירה'); need('sw-off-type', 'סוג עבירה'); need('sw-start', 'תאריך תחילת ריצוי');
+      const box = $('sw-errors');
+      if (errs.length) {
+        box.innerHTML = '<div class="form-error-summary-title">יש להשלים:</div><ul>' + errs.map(e => `<li>${Utils.escHtml(e)}</li>`).join('') + '</ul>';
+        box.style.display = 'block'; box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+      box.style.display = 'none';
+      const n = id => parseInt($(id).value, 10) || 0;
+      const v = id => $(id).value.trim();
+      const start = $('sw-start').value, m = n('sw-months'), d = n('sw-days'), vac = n('sw-vac'), ill = n('sw-ill');
+      const ts = dt => dt.toISOString().split('T')[0];
+      const raw = new Date(start + 'T00:00:00'); raw.setMonth(raw.getMonth() + m); raw.setDate(raw.getDate() + d);
+      const fin = new Date(raw); fin.setDate(fin.getDate() + vac + ill);
+      const totalDays = Utils.daysBetween(start, ts(fin));
+      const unit = DEMO_UNITS.find(u => u.id === v('sw-unit'));
+      const gd = {
+        personalInfo: { idNumber: v('sw-id'), age: v('sw-age'), maritalStatus: v('sw-marital'), educationYears: v('sw-edu'), civilAddress: v('sw-addr'), mast: v('sw-mast'), militaryRole: v('sw-role'), profile: v('sw-profile'), negativeTavan: v('sw-tavan'), dfar: v('sw-dfar'), indications: v('sw-ind') },
+        offenses: [{ details: v('sw-off-details'), offenseType: v('sw-off-type'), punishmentType: v('sw-off-punish'), actualDays: n('sw-off-actual'), workDays: n('sw-off-work') }],
+        legalInfo: { defenseAttorney: v('sw-atty'), socialWorkerDate: v('sw-swdate'), bda: v('sw-bda'), caseNumber: v('sw-case'), verdictDate: v('sw-verdict') },
+        sentenceActual: { actualDays: n('sw-off-actual'), workDays: n('sw-off-work') },
+        sentenceCalcs: (m || d) ? [{ startDate: start, months: m, days: d, vacations: vac, illness: ill, rawEndDate: ts(raw), updatedEndDate: ts(raw), finalEndDate: ts(fin), shortenedEndDate: ts(fin) }] : [],
+        complaints: [], extensions: [],
+        releaseInfo: { releaseCode: '', releaseReason: '', approverName: '', unitCode: '', releaseUnit: '', leaveDate: '', leaveTime: '', reportDate: '', reportTime: '', notes: '' },
+      };
       const nf = {
-        id: 'sw_' + Utils.generateId(), fileNumber: 'SW-' + String(Math.floor(Math.random() * 9000) + 1000),
-        personId, workType: Utils.el('sw-type').value, startDate: start, endDate: endD.toISOString().split('T')[0],
-        hoursRequired: days * 8, hoursCompleted: 0, status: 'active', notes: '', workLog: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+        id: 'sw_' + Utils.generateId(), fileNumber: 'SW-' + String(Math.floor(Math.random() * 90000) + 10000),
+        personId: person.id, militaryNumber: person.militaryNumber, rank: person.rank, serviceType: person.serviceType,
+        employingUnit: v('sw-unit'), supervisorName: v('sw-supervisor'), workType: v('sw-worktype'),
+        offense: v('sw-off-details'), baseId: (unit && unit.baseId) || person.baseId || 'b100',
+        startDate: start, sentenceStart: start, endDate: ts(fin), sentenceEnd: ts(fin), sentence: totalDays,
+        hoursRequired: totalDays * 8, hoursCompleted: 0, status: 'active', notes: '', workLog: [],
+        gachlat: gd, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       };
       Storage.upsert(Storage.KEYS.SERVICE_WORK_FILES, nf);
-      Audit.log({ module: 'incarceration', action: 'create', entityType: 'gachlatFile', entityId: nf.id, description: `תיק גחל"ת ${nf.fileNumber}` });
+      Audit.log({ module: 'incarceration', action: 'create', entityType: 'gachlatFile', entityId: nf.id, description: `פתיחת תיק גחל"ת עובדי שירות ${nf.fileNumber}` });
       Toast.success('התיק נפתח');
       Router.navigate('/service-work-prisoner-file', { id: nf.id });
     };
