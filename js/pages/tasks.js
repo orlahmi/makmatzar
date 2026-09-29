@@ -124,22 +124,22 @@ Pages['tasks'] = function(query) {
 
     Utils.el('tbl-search').addEventListener('input', Utils.debounce(() => {
       filterSearch = Utils.el('tbl-search').value;
-      tableInstance.update(getData());
+      { const d = getData(); tableInstance.update(d); const hc = document.querySelector('.table-panel-header span:last-child'); if (hc) hc.textContent = d.length + ' רשומות'; }
     }, 300));
 
     Utils.el('f-priority').addEventListener('change', () => {
       filterPriority = Utils.el('f-priority').value;
-      tableInstance.update(getData());
+      { const d = getData(); tableInstance.update(d); const hc = document.querySelector('.table-panel-header span:last-child'); if (hc) hc.textContent = d.length + ' רשומות'; }
     });
 
     Utils.el('f-category').addEventListener('change', () => {
       filterCategory = Utils.el('f-category').value;
-      tableInstance.update(getData());
+      { const d = getData(); tableInstance.update(d); const hc = document.querySelector('.table-panel-header span:last-child'); if (hc) hc.textContent = d.length + ' רשומות'; }
     });
 
     Utils.el('f-type').addEventListener('change', () => {
       filterType = Utils.el('f-type').value;
-      tableInstance.update(getData());
+      { const d = getData(); tableInstance.update(d); const hc = document.querySelector('.table-panel-header span:last-child'); if (hc) hc.textContent = d.length + ' רשומות'; }
     });
 
     Utils.el('btn-export').onclick = () => {

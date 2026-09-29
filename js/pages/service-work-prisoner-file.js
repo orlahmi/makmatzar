@@ -665,7 +665,7 @@ Pages['service-work-prisoner-file'] = function(query) {
       if (m + d <= 0) { Toast.error('משך העונש חייב להיות גדול מאפס'); return; }
       const DAYS = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
       const dn = dt => DAYS[dt.getDay()];
-      const ts = dt => dt.toISOString().split('T')[0];
+      const ts = dt => dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
       const raw = new Date(s+'T00:00:00');
       raw.setMonth(raw.getMonth()+m); raw.setDate(raw.getDate()+d);
       const fin = new Date(raw); fin.setDate(fin.getDate()+v+il);
@@ -858,7 +858,7 @@ Pages['service-work-prisoner-file'] = function(query) {
       const n = id => Math.trunc(rawN(id));
       const v = id => $(id).value.trim();
       const start = $('sw-start').value, m = n('sw-months'), d = n('sw-days'), vac = n('sw-vac'), ill = n('sw-ill');
-      const ts = dt => dt.toISOString().split('T')[0];
+      const ts = dt => dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
       const raw = new Date(start + 'T00:00:00'); raw.setMonth(raw.getMonth() + m); raw.setDate(raw.getDate() + d);
       const fin = new Date(raw); fin.setDate(fin.getDate() + vac + ill);
       const totalDays = Utils.daysBetween(start, ts(fin));
