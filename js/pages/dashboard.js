@@ -24,7 +24,7 @@ Pages.dashboard = function(query) {
   const mashlatCompleted = mashlatToday.filter(c => c.status === 'completed');
 
   const eventReports = Storage.getCollection(Storage.KEYS.EVENT_REPORTS);
-  const unresolvedEvents = eventReports.filter(e => e.handlingStatus === 'unresolved');
+  const unresolvedEvents = eventReports.filter(e => Utils.isEventOpen(e));
   const recentEvents = eventReports
     .slice().sort((a, b) => (b.eventDate || '').localeCompare(a.eventDate || ''))
     .slice(0, 5);
@@ -398,7 +398,7 @@ Pages.dashboard = function(query) {
             <div class="dash-trend-footer" style="margin-bottom:12px">
               <span>סה"כ: <strong>${trendVals.reduce((a,b)=>a+b,0)}</strong></span>
               <span style="color:var(--color-danger)">פתוחים: <strong>${unresolvedEvents.length}</strong></span>
-              <span style="color:var(--color-success)">נסגרו: <strong>${eventReports.filter(e=>e.handlingStatus==='resolved').length}</strong></span>
+              <span style="color:var(--color-success)">נסגרו: <strong>${eventReports.filter(e=>!Utils.isEventOpen(e)).length}</strong></span>
             </div>
             ${recentEvents.length > 0 ? `
               <div class="dash-count-section-title">אירועים אחרונים</div>

@@ -811,7 +811,7 @@ Pages['prisoner-file'] = function(query) {
         <div class="card-body">
           ${evs.length === 0 ? '<div class="empty-state-desc">אין דוחות אירוע מקושרים לכלוא זה.</div>' : `
           <table class="data-table"><thead><tr><th>מס׳ סידורי</th><th>תאריך</th><th>שעה</th><th>כותרת</th><th>מיקום</th><th>סטטוס</th></tr></thead><tbody>
-            ${evs.map(e => `<tr style="cursor:pointer" onclick="Router.navigate('/event-reports')"><td>${esc(String(e.sequenceNumber))}</td><td>${fd(e.eventDate)}</td><td>${esc(e.eventTime)}</td><td>${esc(e.title)}</td><td>${esc(e.location)}</td><td>${StatusBadge.render(e.status || (e.handlingStatus === 'resolved' ? 'closed' : 'open'))}</td></tr>`).join('')}
+            ${evs.map(e => `<tr style="cursor:pointer" onclick="Router.navigate('/event-reports')"><td>${esc(String(e.sequenceNumber))}</td><td>${fd(e.eventDate)}</td><td>${esc(e.eventTime)}</td><td>${esc(e.title)}</td><td>${esc(e.location)}</td><td>${(Utils.isEventOpen(e) ? '<span class="badge badge-active">פתוח</span>' : '<span class="badge badge-closed">סגור</span>')}</td></tr>`).join('')}
           </tbody></table>`}
         </div>
       </div>`;

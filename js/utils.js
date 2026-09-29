@@ -421,6 +421,7 @@ window.Utils = (function() {
     el, qs, qsa, escHtml, setHtml, show, hide, toggle,
     on, delegate, debounce, throttle,
     sortBy, searchFilter, getNestedValue,
+    isEventOpen: (e) => !(e.status === 'closed' || e.handlingStatus === 'resolved'),
     exportCsv, groupBy, unique, sum,
     parseQuery, parseHashQuery, buildQuery,
     currentTimeString, currentDateString,

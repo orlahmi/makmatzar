@@ -104,10 +104,6 @@ window.DELIVERY_METHODS = [
   { id: 'digital', label: 'מערכת דיגיטלית' },
 ];
 
-window.EVENT_REPORT_TYPES = [
-  { id: 'internal', label: 'פנימי' },
-  { id: 'external', label: 'חיצוני' },
-];
 
 window.DETENTION_REASONS = [
   'הפרת ביטחון', 'תקיפה', 'גניבה', 'שכרות', 'עריקות', 'השתמטות',

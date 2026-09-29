@@ -72,11 +72,11 @@ window.Topbar = (function() {
       document.body.insertBefore(bar, document.body.firstChild);
     }
 
-    const unresolvedEvents = Storage.getCollection(Storage.KEYS.EVENT_REPORTS).filter(e => e.handlingStatus === 'unresolved');
+    const unresolvedEvents = Storage.getCollection(Storage.KEYS.EVENT_REPORTS).filter(e => Utils.isEventOpen(e));
     const noShows = Storage.getCollection(Storage.KEYS.MASHLAT_COORDINATIONS).filter(c => c.status === 'no_show' && c.coordinationDate === Utils.today());
 
     const items = [];
-    if (unresolvedEvents.length > 0) items.push({ count: unresolvedEvents.length, label: 'אירועים לא מטופלים', route: '/event-reports' });
+    if (unresolvedEvents.length > 0) items.push({ count: unresolvedEvents.length, label: 'אירועים פתוחים', route: '/event-reports' });
     if (noShows.length > 0) items.push({ count: noShows.length, label: 'אי-הופעות היום', route: '/mashlat' });
 
     if (items.length === 0) {
