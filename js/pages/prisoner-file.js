@@ -935,7 +935,7 @@ Pages['prisoner-file'] = function(query) {
 
   // ---------- אירוע חריג — reads the central event-reports dataset (no second copy) ----------
   function renderPrisonerIncidents(file, esc, fd) {
-    const evs = Storage.getCollection(Storage.KEYS.EVENT_REPORTS).filter(e => e.prisonerFileId === file.id || (e.personId && e.personId === file.personId) || (e.participants || []).some(p => p.prisonerFileId === file.id || p.personId === file.personId));
+    const evs = Storage.getCollection(Storage.KEYS.EVENT_REPORTS).filter(e => e.prisonerFileId === file.id || (e.personId && e.personId === file.personId) || (e.participants || []).some(p => p === file.personId || (p && (p.personId === file.personId || p.prisonerFileId === file.id))));
     return `
       <div class="card">
         <div class="card-header"><div class="card-title">אירועים חריגים — מתוך דוחות אירוע</div>

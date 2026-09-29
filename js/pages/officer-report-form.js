@@ -303,38 +303,46 @@ Pages['officer-report-form'] = function(query) {
     `;
   }
 
+  const DELIVERY_LABEL = Object.fromEntries((window.DELIVERY_METHODS || []).map(d => [d.id, d.label]));
   function renderTabDetails() {
+    const d = report.delivery || {};
+    const L = report.locationDetails || {};
+    const locRows = L.type === 'junction' ? [['סוג מיקום', 'צומת'], ['צומת', L.junction], ['מכיוון', L.from], ['לכיוון', L.to], ['לפני / אחרי הצומת (מטרים)', L.meters]]
+      : L.type === 'road' ? [['סוג מיקום', 'בכביש'], ['בכביש', L.road], ['בק״מ', L.km], ['מכיוון', L.from], ['לכיוון', L.to]]
+      : L.type === 'street' ? [['סוג מיקום', 'ברחוב'], ['ברחוב', L.street], ['ליד בית מס׳', L.house], ['בעיר', L.city]]
+      : L.type === 'other' ? [['סוג מיקום', 'אחר'], ['מלל', L.text]]
+      : [['מיקום', report.location], ['עיר', report.locationCity], ['כביש', report.locationRoad], ['צומת', report.locationJunction]];
+    const sigs = [['חתימת מקבל הדו"ח', d.recipientSignature], ['חתימת שוטר מזהה', td.bd_officerSignature], ['חתימת מפעיל (אמינות הפעלה)', td.rl_operatorSignature], ['חתימת אתת', td.at_signature], ['חתימת מפעיל (בדיקות תקינות)', td.ck_operatorSignature]].filter(x => x[1]);
     return `
       <div class="tab-section-grid">
         <div class="card">
           <div class="card-header"><div class="card-title">מסירת הדו"ח</div></div>
-          <div class="card-body">
-            <div class="info-list">
-              ${infoRow('שיטת מסירה', esc(report.deliveryMethod))}
-              ${infoRow('תאריך מסירה', fdate(report.deliveryDate))}
-              ${infoRow('מקבל', esc(report.deliveryRecipient))}
-              ${infoRow('סירב לחתום', report.refuseToSign ? 'כן' : 'לא')}
-              ${infoRow('הערות מסירה', esc(report.deliveryRemarks))}
-            </div>
-          </div>
+          <div class="card-body"><div class="info-list">
+            ${infoRow('מסירת הדו"ח', esc(DELIVERY_LABEL[report.deliveryMethod] || report.deliveryMethod))}
+            ${infoRow('תאריך מסירה', fdate(report.deliveryDate))}
+            ${infoRow('תגובת מקבל הדו"ח', esc(d.recipientResponse || report.deliveryRecipient))}
+            ${infoRow('סירוב חתימה', (d.refusedToSign || report.refuseToSign) ? 'כן — ' + (d.refuseReason || '—') : 'לא')}
+            ${report.deliveryMethod === 'locate' ? infoRow('מזהה עבירה (דו"ח איתור)', esc((d.locatorMilNum || '') + ' ' + (d.locatorFirstName || '') + ' ' + (d.locatorLastName || '')) + ' — ' + esc(d.locateReason)) : ''}
+            ${infoRow('הערות מסירה', esc(d.remarks || report.deliveryRemarks))}
+          </div></div>
         </div>
         <div class="card">
-          <div class="card-header"><div class="card-title">מיקום</div></div>
-          <div class="card-body">
-            <div class="info-list">
-              ${infoRow('עיר', esc(report.locationCity))}
-              ${infoRow('כביש', esc(report.locationRoad))}
-              ${infoRow('צומת', esc(report.locationJunction))}
-              ${infoRow('מיקום מדויק', esc(report.locationExact))}
-            </div>
-          </div>
+          <div class="card-header"><div class="card-title">זמן ומיקום</div></div>
+          <div class="card-body"><div class="info-list">
+            ${infoRow('יום בשבוע', esc(report.weekday))}
+            ${infoRow('במסגרת', esc(report.enforcementFramework))}
+            ${locRows.map(r => infoRow(r[0], esc(r[1] == null ? '' : String(r[1])))).join('')}
+            ${infoRow('בנסיבות', esc(report.circumstances))}
+          </div></div>
         </div>
+        ${sigs.length ? `<div class="card"><div class="card-header"><div class="card-title">חתימות</div></div><div class="card-body"><div class="info-list">${sigs.map(x => infoRow(x[0], esc(x[1]))).join('')}</div></div></div>` : ''}
       </div>
     `;
   }
 
   function renderTabVehicle() {
     const v = report.vehicle || {};
+    if (report.vehicleInvolved === false) return `<div class="card"><div class="card-body"><div class="empty-state-desc">לא צוין רכב או רישיון מעורבים באירוע.</div></div></div>`;
     return `
       <div class="tab-section-grid">
         <div class="card">

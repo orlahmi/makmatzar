@@ -422,7 +422,7 @@ Pages['inmate-activities'] = function(query) {
               </select>
             </div>
             <div class="form-group">
-              <label class="form-label">שעה</label>
+              <label class="form-label">שעה <span class="required">*</span></label>
               <input type="time" id="rec-time" class="form-control">
             </div>
             <div class="form-group">
@@ -472,8 +472,18 @@ Pages['inmate-activities'] = function(query) {
     function saveRecurring() {
       const daysOfWeek = Array.from(document.querySelectorAll('.rec-dow-cb:checked')).map(cb => parseInt(cb.value, 10));
       const participants = Array.from(document.querySelectorAll('.rec-participant-cb:checked')).map(cb => cb.value);
+      if (!Utils.el('rec-type').value) { Toast.error('יש לבחור סוג פעילות'); return; }
       if (!daysOfWeek.length) { Toast.error('יש לבחור לפחות יום אחד בשבוע'); return; }
       if (!participants.length) { Toast.error('יש לבחור לפחות משתתף אחד'); return; }
+      if (!Utils.el('rec-time').value) { Toast.error('יש להזין שעה'); return; }
+      if (!Utils.el('rec-start').value) { Toast.error('יש להזין תאריך התחלה'); return; }
+      const endV = Utils.el('rec-end').value;
+      if (endV && endV < Utils.el('rec-start').value) { Toast.error('תאריך הסיום לא יכול להיות לפני תאריך ההתחלה'); return; }
+      const dur = Utils.el('rec-duration').value;
+      if (dur && Number(dur) <= 0) { Toast.error('משך לא תקין'); return; }
+      const sig = (t, days, parts, st, en, tm) => [t, days.slice().sort().join(), parts.slice().sort().join(), st, en || '', tm].join('|');
+      const newSig = sig(Utils.el('rec-type').value, daysOfWeek, participants, Utils.el('rec-start').value, endV, Utils.el('rec-time').value);
+      if (Storage.getCollection(Storage.KEYS.INMATE_RECURRING_ACTIVITIES).some(r => sig(r.activityType, r.daysOfWeek || [], r.participants || [], r.startDate, r.endDate, r.time) === newSig)) { Toast.error('פעילות קבועה זהה כבר קיימת'); return; }
       const def = {
         id: 'rec_' + Utils.generateId(),
         activityType: Utils.el('rec-type').value,

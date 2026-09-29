@@ -175,28 +175,10 @@ Pages['new-report-full'] = function(query) {
               <input type="time" name="time" class="form-control" required>
             </div>
             <div class="form-group">
-              <label class="form-label">עיר <span class="required">*</span></label>
-              <input name="locationCity" class="form-control" required>
-            </div>
-            <div class="form-group">
-              <label class="form-label">כביש / רחוב <span class="required">*</span></label>
-              <input name="locationRoad" class="form-control" required>
-            </div>
-            <div class="form-group">
-              <label class="form-label">צומת / נקודת ציון <span class="required">*</span></label>
-              <input name="locationJunction" class="form-control" required>
-            </div>
-            <div class="form-group">
-              <label class="form-label">מכיוון <span class="required">*</span></label>
-              <input name="fromDirection" class="form-control" required>
-            </div>
-            <div class="form-group">
-              <label class="form-label">לכיוון <span class="required">*</span></label>
-              <input name="toDirection" class="form-control" required>
-            </div>
-            <div class="form-group">
-              <label class="form-label">מיקום מדויק <span class="required">*</span></label>
-              <input name="locationExact" class="form-control" required>
+              <label class="form-label">סוג מיקום <span class="required">*</span></label>
+              <select name="locType" id="loc-type" class="form-control" required>
+                <option value="">בחר</option><option value="junction">צומת</option><option value="road">בכביש</option><option value="street">ברחוב</option><option value="other">אחר</option>
+              </select>
             </div>
             <div class="form-group">
               <label class="form-label">במסגרת <span class="required">*</span></label>
@@ -204,6 +186,26 @@ Pages['new-report-full'] = function(query) {
                 <option value="">בחר מסגרת</option>${FRAMEWORKS.map(d => `<option value="${d}">${d}</option>`).join('')}
               </select>
             </div>
+          </div>
+          <div class="form-row form-row-3 loc-group" data-group="junction" style="display:none">
+            ${inp('jn_junction', 'צומת', 'data-loc="junction" disabled')}
+            ${inp('jn_from', 'מכיוון', 'data-loc="junction" disabled')}
+            ${inp('jn_to', 'לכיוון', 'data-loc="junction" disabled')}
+            ${inp('jn_meters', 'מיקום לפני / אחרי הצומת (במטרים)', 'type="number" data-loc="junction" disabled')}
+          </div>
+          <div class="form-row form-row-3 loc-group" data-group="road" style="display:none">
+            ${inp('rd_road', 'בכביש', 'data-loc="road" disabled')}
+            ${inp('rd_km', 'בק״מ', 'type="number" step="any" data-loc="road" disabled')}
+            ${inp('rd_from', 'מכיוון', 'data-loc="road" disabled')}
+            ${inp('rd_to', 'לכיוון', 'data-loc="road" disabled')}
+          </div>
+          <div class="form-row form-row-3 loc-group" data-group="street" style="display:none">
+            ${inp('st_street', 'ברחוב', 'data-loc="street" disabled')}
+            ${inp('st_house', 'ליד בית מס׳', 'data-loc="street" disabled')}
+            ${inp('st_city', 'בעיר', 'data-loc="street" disabled')}
+          </div>
+          <div class="form-row form-row-3 loc-group" data-group="other" style="display:none">
+            ${inp('ot_text', 'מלל', 'data-loc="other" disabled')}
           </div>
         </div>
 
@@ -353,13 +355,16 @@ Pages['new-report-full'] = function(query) {
 
         ${sec('license-vehicle', `${Utils.icon('report', 18)} רישיון ורכב — מעורבים באירוע`, `
           <div class="form-row form-row-3">
-            ${inp('lv_licenseExpiry', 'תוקף רישיון', 'type="date"')}
-            ${inp('lv_licenseNumber', 'מספר רישיון')}
-            ${sel('lv_licenseType', 'סוג רישיון', LICENSE_TYPES)}
-            ${inp('lv_civilPlate', 'מספר רישוי אזרחי')}
-            ${inp('lv_militaryPlate', 'מספר רישוי צבאי')}
-            ${inp('lv_vehicleType', 'סוג רכב')}
-            ${inp('lv_vehicleColor', 'צבע')}
+            ${yn('vehicleInvolved', 'רישיון ורכב מעורבים באירוע')}
+          </div>
+          <div class="form-row form-row-3" id="vehicle-fields" style="display:none">
+            ${inp('lv_licenseExpiry', 'תוקף רישיון', 'type="date" data-veh="1" disabled')}
+            ${inp('lv_licenseNumber', 'מספר רישיון', 'data-veh="1" disabled')}
+            ${sel('lv_licenseType', 'סוג רישיון', LICENSE_TYPES).replace('<select ', '<select data-veh="1" disabled ')}
+            ${inp('lv_civilPlate', 'מספר רישוי אזרחי', 'data-veh="1" disabled')}
+            ${inp('lv_militaryPlate', 'מספר רישוי צבאי', 'data-veh="1" disabled')}
+            ${inp('lv_vehicleType', 'סוג רכב', 'data-veh="1" disabled')}
+            ${inp('lv_vehicleColor', 'צבע', 'data-veh="1" disabled')}
           </div>`, BOTH)}
 
         <div class="page-section" data-section="witnesses" data-types="dmash,bidatz">
@@ -425,7 +430,7 @@ Pages['new-report-full'] = function(query) {
       const visible = section.dataset.types.split(',').includes(type);
       section.style.display = visible ? '' : 'none';
       section.querySelectorAll('input,select,textarea').forEach(el => {
-        if (el.dataset.cond) return; // conditional fields handled below
+        if (el.dataset.cond || el.dataset.veh || el.dataset.loc) return; // conditional fields handled in applyConditionals
         el.disabled = !visible;
       });
       if (!visible) {
@@ -443,6 +448,17 @@ Pages['new-report-full'] = function(query) {
     wit.querySelectorAll('input').forEach(el => { el.disabled = false; });
   }
   function applyConditionals() {
+    // location group per old form (only the chosen group is visible/enabled/required)
+    const lt = form.locType && !form.locType.disabled ? form.locType.value : '';
+    form.querySelectorAll('.loc-group').forEach(g => {
+      const on = g.dataset.group === lt;
+      g.style.display = on ? '' : 'none';
+      g.querySelectorAll('[data-loc]').forEach(el => { el.disabled = !on; if (!on) { el.value = ''; Validation.clearFieldError(el); } });
+    });
+    // vehicle / license fields only when a vehicle is involved
+    const veh = form.vehicleInvolved && !form.vehicleInvolved.disabled && form.vehicleInvolved.value === 'yes';
+    const vf = Utils.el('vehicle-fields'); if (vf) vf.style.display = veh ? '' : 'none';
+    form.querySelectorAll('[data-veh]').forEach(el => { el.disabled = !veh; if (!veh) { el.value = ''; Validation.clearFieldError(el); } });
     const locate = form.deliveryMethod.value === 'locate' && !form.deliveryMethod.disabled;
     Utils.el('locate-block').style.display = locate ? '' : 'none';
     form.querySelectorAll('[data-cond="locate"]').forEach(el => { el.disabled = !locate; if (!locate) { el.value = ''; Validation.clearFieldError(el); } });
@@ -452,6 +468,8 @@ Pages['new-report-full'] = function(query) {
   }
   form.reportType.addEventListener('change', applyType);
   form.deliveryMethod.addEventListener('change', applyConditionals);
+  form.locType.addEventListener('change', applyConditionals);
+  form.vehicleInvolved.addEventListener('change', applyConditionals);
   Utils.el('refuse-sign').addEventListener('change', applyConditionals);
 
   // weekday follows date
@@ -590,10 +608,34 @@ Pages['new-report-full'] = function(query) {
     return { errors, firstInvalidField };
   }
 
+  function locDetails(d) {
+    const t = d.locType;
+    if (t === 'junction') return { type: t, junction: d.jn_junction, from: d.jn_from, to: d.jn_to, meters: d.jn_meters };
+    if (t === 'road') return { type: t, road: d.rd_road, km: d.rd_km, from: d.rd_from, to: d.rd_to };
+    if (t === 'street') return { type: t, street: d.st_street, house: d.st_house, city: d.st_city };
+    if (t === 'other') return { type: t, text: d.ot_text };
+    return {};
+  }
+  function locText(d) {
+    const x = locDetails(d);
+    if (x.type === 'junction') return 'צומת ' + x.junction;
+    if (x.type === 'road') return 'כביש ' + x.road + (x.km ? ' ק״מ ' + x.km : '');
+    if (x.type === 'street') return x.street + (x.house ? ' ' + x.house : '') + ', ' + x.city;
+    return x.text || '';
+  }
+
   function saveReport(status) {
     const data = getFormData();
     data.status = status;
 
+    if (status === 'draft') {
+      // a draft must be identifiable: report type + a valid military number
+      if (!data.militaryNumber || !Utils.isValidMilNum(data.militaryNumber)) {
+        Validation.showFieldError(form.militaryNumber, 'לשמירת טיוטה יש להזין מספר אישי תקין');
+        form.militaryNumber.focus(); Toast.error('לשמירת טיוטה יש להזין לפחות סוג דו"ח ומספר אישי תקין');
+        return;
+      }
+    }
     if (status !== 'draft') {
       const { errors, firstInvalidField } = validate(data);
       const errDiv = Utils.el('form-errors');
@@ -620,6 +662,7 @@ Pages['new-report-full'] = function(query) {
     Object.keys(data).forEach(k => { if (/^(bd|sp|rl|at|ck)_/.test(k)) typeData[k] = data[k]; });
     const shared = {};
     Object.keys(data).forEach(k => { if (/^lv_/.test(k)) shared[k] = data[k]; });
+    if (data.vehicleInvolved !== 'yes') Object.keys(shared).forEach(k => delete shared[k]);
 
     const report = {
       id: reportId,
@@ -659,11 +702,9 @@ Pages['new-report-full'] = function(query) {
         locatorMilNum: data.locatorMilNum || '', locatorFirstName: data.locatorFirstName || '',
         locatorLastName: data.locatorLastName || '', locateReason: data.locateReason || '', remarks: data.deliveryRemarks || '',
       },
-      location: data.locationExact || data.locationCity || '',
-      locationDetails: {
-        city: data.locationCity, road: data.locationRoad, junction: data.locationJunction,
-        from: data.fromDirection, to: data.toDirection, exact: data.locationExact,
-      },
+      location: locText(data),
+      locationDetails: locDetails(data),
+      vehicleInvolved: data.vehicleInvolved === 'yes',
       vehicle: shared,
       typeData,
       witnesses: witnesses.filter(w => Object.values(w).some(Boolean)),
