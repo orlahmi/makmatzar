@@ -92,9 +92,9 @@ window.Permissions = (function() {
         items: [
           { label: 'קניות בקנטינה', path: '/canteen-purchases', icon: 'canteen', sublabel: 'קנטינה' },
           { label: 'תנועות מלאי בין קנטינות', path: '/canteen-stock-movements', icon: 'stock' },
-          { label: 'תיק כלוא', path: '/prisoner-file', icon: 'report' },
-          { label: 'תיק אסיר בעבודות שירות', path: '/service-work-prisoner-file', icon: 'report' },
-          { label: 'גחל"ת', path: '/gachlat', icon: 'report' },
+          { label: 'אחזור תיק כלוא', path: '/prisoner-file', icon: 'report' },
+          { label: 'גחל"ת עובדי שירות', path: '/service-work-prisoner-file', icon: 'report' },
+          { label: 'גחל"ת אבחון', path: '/gachlat', icon: 'report' },
           { label: 'פעילויות', path: '/inmate-activities', icon: 'activity' },
           { label: 'דוחות אירוע', path: '/event-reports', icon: 'event' },
           { label: 'דו"ח ספירות', path: '/counting-report', icon: 'counting' },
