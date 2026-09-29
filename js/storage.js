@@ -81,21 +81,34 @@ window.Storage = (function() {
   }
 
   /* Typed accessors */
-  function getCollection(key) {
+  // raw = includes soft-deleted records (used internally and for explicit archive views)
+  function getRaw(key) {
     return get(key) || [];
   }
 
+  // normal reads never return soft-deleted records
+  function getCollection(key, opts) {
+    const all = getRaw(key);
+    if (opts && opts.includeDeleted) return all;
+    return Array.isArray(all) ? all.filter(i => !(i && i.deleted)) : all;
+  }
+
+  // writes keep soft-deleted records that the caller (who only saw live records) did not include
   function setCollection(key, arr) {
+    const raw = getRaw(key);
+    if (Array.isArray(raw) && Array.isArray(arr)) {
+      const keep = raw.filter(x => x && x.deleted && !arr.some(a => a && a.id === x.id));
+      if (keep.length) return set(key, arr.concat(keep));
+    }
     return set(key, arr);
   }
 
   function getById(key, id) {
-    const arr = getCollection(key);
-    return arr.find(item => item.id === id) || null;
+    return getCollection(key).find(item => item.id === id) || null;
   }
 
   function upsert(key, item) {
-    const arr = getCollection(key);
+    const arr = getRaw(key);
     const idx = arr.findIndex(i => i.id === item.id);
     if (idx >= 0) {
       arr[idx] = { ...arr[idx], ...item, updatedAt: new Date().toISOString() };
@@ -114,7 +127,7 @@ window.Storage = (function() {
   }
 
   function softDelete(key, id) {
-    const arr = getCollection(key);
+    const arr = getRaw(key);
     const idx = arr.findIndex(i => i.id === id);
     if (idx >= 0) {
       arr[idx] = { ...arr[idx], deleted: true, deletedAt: new Date().toISOString() };
@@ -143,7 +156,7 @@ window.Storage = (function() {
     KEYS,
     get, set, remove,
     isSeeded, markSeeded, resetAll,
-    getCollection, setCollection, getById,
+    getCollection, getRaw, setCollection, getById,
     upsert, remove: remove_item, softDelete,
     query
   };
