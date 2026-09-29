@@ -264,13 +264,7 @@ Pages['service-work-prisoner-file'] = function(query) {
     const dn = s => { if (!s) return '—'; const d = new Date(s+'T00:00:00'); return isNaN(d)?'—':DAYS[d.getDay()]; };
     const fd = s => s ? Utils.formatDate(s) : '—';
 
-    const data = calcs.length ? calcs : [{
-      startDate:'2026-01-15', months:2, days:15,
-      rawEndDate:'2026-04-01', updatedEndDate:'2026-04-01',
-      vacations:3, illness:0,
-      finalEndDate:'2026-04-04', shortenedEndDate:'2026-03-25',
-      _demo:true,
-    }];
+    const data = calcs;
 
     const rows = data.map((c, i) => `<tr>
       <td>${fd(c.startDate)}</td>
@@ -286,7 +280,7 @@ Pages['service-work-prisoner-file'] = function(query) {
       <td>${dn(c.finalEndDate)}</td>
       <td>${fd(c.shortenedEndDate)}</td>
       <td>${dn(c.shortenedEndDate)}</td>
-      <td>${c._demo ? '' : `<button class="row-action-btn" onclick="window.gcDelCalc(${i})">${Utils.icon('delete',12)}</button>`}</td>
+      <td><button class="row-action-btn" onclick="window.gcDelCalc(${i})">${Utils.icon('delete',12)}</button></td>
     </tr>`).join('');
 
     return `
@@ -315,7 +309,7 @@ Pages['service-work-prisoner-file'] = function(query) {
                 <th>פיזור ביום</th>
                 <th style="width:36px"></th>
               </tr></thead>
-              <tbody>${rows}</tbody>
+              <tbody>${rows || '<tr><td colspan="14" style="text-align:center;padding:24px;color:var(--color-text-muted)">אין חישובי עונש בתיק. לחץ "הוסף חישוב" להזנת נתוני ריצוי.</td></tr>'}</tbody>
             </table>
           </div>
         </div>
@@ -667,6 +661,8 @@ Pages['service-work-prisoner-file'] = function(query) {
       const d = parseInt(Utils.el('gsc-d').value)||0;
       const v = parseInt(Utils.el('gsc-v').value)||0;
       const il = parseInt(Utils.el('gsc-i').value)||0;
+      if (m < 0 || d < 0 || v < 0 || il < 0) { Toast.error('ערכים שליליים אינם חוקיים'); return; }
+      if (m + d <= 0) { Toast.error('משך העונש חייב להיות גדול מאפס'); return; }
       const DAYS = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
       const dn = dt => DAYS[dt.getDay()];
       const ts = dt => dt.toISOString().split('T')[0];
@@ -846,13 +842,27 @@ Pages['service-work-prisoner-file'] = function(query) {
         return;
       }
       box.style.display = 'none';
-      const n = id => parseInt($(id).value, 10) || 0;
+      const rawN = id => $(id).value.trim() === '' ? 0 : Number($(id).value);
+      const numErrs = [];
+      [['sw-months', 'חודשים'], ['sw-days', 'ימים'], ['sw-vac', 'חופשות'], ['sw-ill', 'מחלה'], ['sw-off-actual', 'כליאה ממשית'], ['sw-off-work', 'עבודות צבאיות']].forEach(([id, l]) => {
+        const x = rawN(id);
+        if (!Number.isInteger(x) || x < 0) { numErrs.push(l + ' — מספר שלם לא שלילי'); $(id).style.borderColor = 'var(--color-danger)'; } else $(id).style.borderColor = '';
+      });
+      const startStr = $('sw-start').value;
+      if (!startStr || isNaN(new Date(startStr + 'T00:00:00').getTime())) numErrs.push('תאריך תחילת ריצוי לא תקין');
+      if (!numErrs.length && rawN('sw-months') + rawN('sw-days') <= 0) { numErrs.push('משך העונש חייב להיות גדול מאפס (חודשים או ימים)'); $('sw-months').style.borderColor = $('sw-days').style.borderColor = 'var(--color-danger)'; }
+      if (numErrs.length) {
+        const box0 = $('sw-errors'); box0.innerHTML = '<div class="form-error-summary-title">יש לתקן:</div><ul>' + numErrs.map(e => `<li>${Utils.escHtml(e)}</li>`).join('') + '</ul>';
+        box0.style.display = 'block'; box0.scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
+      }
+      const n = id => Math.trunc(rawN(id));
       const v = id => $(id).value.trim();
       const start = $('sw-start').value, m = n('sw-months'), d = n('sw-days'), vac = n('sw-vac'), ill = n('sw-ill');
       const ts = dt => dt.toISOString().split('T')[0];
       const raw = new Date(start + 'T00:00:00'); raw.setMonth(raw.getMonth() + m); raw.setDate(raw.getDate() + d);
       const fin = new Date(raw); fin.setDate(fin.getDate() + vac + ill);
       const totalDays = Utils.daysBetween(start, ts(fin));
+      if (!(totalDays > 0) || ts(fin) < start) { const b = $('sw-errors'); b.innerHTML = 'חישוב העונש אינו תקין — תאריך הסיום חייב להיות אחרי תאריך התחלה'; b.style.display = 'block'; return; }
       const unit = DEMO_UNITS.find(u => u.id === v('sw-unit'));
       const gd = {
         personalInfo: { idNumber: v('sw-id'), age: v('sw-age'), maritalStatus: v('sw-marital'), educationYears: v('sw-edu'), civilAddress: v('sw-addr'), mast: v('sw-mast'), militaryRole: v('sw-role'), profile: v('sw-profile'), negativeTavan: v('sw-tavan'), dfar: v('sw-dfar'), indications: v('sw-ind') },
