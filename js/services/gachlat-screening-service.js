@@ -83,6 +83,34 @@ window.GachlatScreeningService = (function() {
     return { candidateType: 'not_candidate', reasons: ['לא עומד בקריטריונים לגחל"ת (טיוטה — נדרש אישור)'] };
   }
 
+  /* ── HARD vs FLEXIBLE criteria (separate concepts) ─────────────────────────
+   * hard      = a match makes the soldier a mandatory (חובה) candidate
+   * flexible  = a match makes him an optional (רשות) candidate
+   * Both lists are derived from the SAME draft rules above — they are NOT
+   * confirmed professional criteria (draft: true) until Gachlat staff sign off.
+   * ─────────────────────────────────────────────────────────────────────────── */
+  var HARD_CRITERIA = SCREENING_RULES.filter(function(r) { return r.candidateType === 'mandatory'; })
+    .map(function(r) { return { id: r.id, label: r.label, test: r.test, draft: true }; });
+  var FLEXIBLE_CRITERIA = SCREENING_RULES.filter(function(r) { return r.candidateType === 'optional'; })
+    .map(function(r) { return { id: r.id, label: r.label, test: r.test, draft: true }; });
+
+  function screenDataFor(c) {
+    var pf = c && c.prisonerFileId ? Storage.getById(Storage.KEYS.PRISONER_FILES, c.prisonerFileId) : null;
+    return {
+      prisonerType: (pf && pf.prisonerType) || c.prisonerType || '',
+      serviceType: c.serviceType || '',
+      offense: c.offense || (pf && (pf.detentionReason || pf.offense)) || '',
+      sentenceDays: (pf && (pf.sentence || pf.sentenceDays)) || c.sentenceDays || 0,
+      age: c.age || 0,
+    };
+  }
+
+  function criteriaStatus(c) {
+    var d = screenDataFor(c);
+    var run = function(list) { return list.map(function(k) { var met = false; try { met = !!k.test(d); } catch (e) {} return { id: k.id, label: k.label, met: met, draft: k.draft }; }); };
+    return { hard: run(HARD_CRITERIA), flexible: run(FLEXIBLE_CRITERIA), data: d };
+  }
+
   /* ── PUBLIC: labels/colors ───────────────────────────────────────────────── */
   var CANDIDATE_TYPE_LABELS = { mandatory: 'חובה', optional: 'רשות', not_candidate: 'לא מועמד' };
   var CANDIDATE_TYPE_CLASSES = { mandatory: 'badge-critical', optional: 'badge-info', not_candidate: 'badge-inactive' };
@@ -150,6 +178,7 @@ window.GachlatScreeningService = (function() {
 
   return {
     evaluate,
+    HARD_CRITERIA, FLEXIBLE_CRITERIA, criteriaStatus,
     syncFromPrisoners,
     candidateBadge,
     statusBadge,

@@ -152,7 +152,7 @@ window.Pages['gachlat'] = function(query) {
         createdAt: daysAgo(5), updatedAt: daysAgo(3),
       },
     ];
-    DEMO.forEach(function(c) { Storage.upsert(KEY, c); });
+    DEMO.forEach(function(c) { if (!Storage.getById(KEY, c.id)) Storage.upsert(KEY, c); });
   })();
 
   /* ── CONSTANTS ────────────────────────────────────────────────────────────── */
@@ -169,12 +169,15 @@ window.Pages['gachlat'] = function(query) {
   var DRAWER_SECTIONS = [
     { key: 'details',    label: 'פרטי החייל' },
     { key: 'candidacy',  label: 'התאמה לגחל"ת' },
+    { key: 'hard',       label: 'קריטריונים קשיחים' },
+    { key: 'flexible',   label: 'קריטריונים גמישים' },
     { key: 'status',     label: 'סטטוס התהליך' },
     { key: 'background', label: 'מידע מקדים' },
-    { key: 'assessment', label: 'אבחון' },
-    { key: 'summary',    label: 'סיכום' },
     { key: 'followup',   label: 'יומן מעקב' },
-    { key: 'history',    label: 'היסטוריה' },
+    { key: 'assessment', label: 'אבחון' },
+    { key: 'summary',    label: 'סיכום אבחון' },
+    { key: 'prior',      label: 'אבחונים קודמים' },
+    { key: 'history',    label: 'היסטוריית פעילות' },
   ];
 
   var GACHLAT_QUESTIONNAIRES = {
@@ -204,7 +207,7 @@ window.Pages['gachlat'] = function(query) {
 
   /* ── STATE ────────────────────────────────────────────────────────────────── */
   var state = {
-    filters: { personalNumber: '', name: '', unit: '', serviceType: '', assessmentStatus: '', offense: '', assessor: '' },
+    filters: { personalNumber: '', name: '', unit: '', serviceType: '', assessmentStatus: '', offense: '', assessor: '', flex: {} },
     activeTab: 'all',
     openId: (query && query.id) || null,
     drawerSection: 'details',
@@ -227,6 +230,11 @@ window.Pages['gachlat'] = function(query) {
     if (filters.serviceType)    data = data.filter(function(c) { return c.serviceType === filters.serviceType; });
     if (filters.assessmentStatus) data = data.filter(function(c) { return c.assessmentStatus === filters.assessmentStatus; });
     if (filters.assessor)       data = data.filter(function(c) { return (c.assessorName || '').includes(filters.assessor); });
+    var flexIds = Object.keys(filters.flex || {}).filter(function(k) { return filters.flex[k]; });
+    if (flexIds.length) data = data.filter(function(c) {
+      var st = SS.criteriaStatus(c).flexible;
+      return flexIds.every(function(id) { return st.some(function(k) { return k.id === id && k.met; }); });
+    });
     if (filters.offense)        data = data.filter(function(c) { return (c.offense || '').includes(filters.offense); });
     return data;
   }
@@ -342,6 +350,12 @@ window.Pages['gachlat'] = function(query) {
             '<option value="">— סטטוס אבחון</option>' + statusOpts +
           '</select>' +
           '<button type="button" class="btn btn-secondary" id="gc-filter-clear" style="height:32px">נקה סינון</button>' +
+        '</div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;margin-top:10px;padding-top:8px;border-top:1px solid var(--color-border)">' +
+          '<span style="font-size:12px;font-weight:600;color:var(--color-text-muted)">קריטריונים גמישים (טיוטה):</span>' +
+          SS.FLEXIBLE_CRITERIA.map(function(k) {
+            return '<label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" class="gc-filter gc-flex" data-flex="' + k.id + '"' + ((f.flex || {})[k.id] ? ' checked' : '') + '> ' + Utils.escHtml(k.label) + '</label>';
+          }).join('') +
         '</div>' +
       '</div>'
     );
@@ -487,6 +501,9 @@ window.Pages['gachlat'] = function(query) {
     var body = '';
     if (state.drawerSection === 'details')    body = buildSecDetails(c);
     else if (state.drawerSection === 'candidacy')  body = buildSecCandidacy(c);
+    else if (state.drawerSection === 'hard')       body = buildSecCriteria(c, 'hard');
+    else if (state.drawerSection === 'flexible')   body = buildSecCriteria(c, 'flexible');
+    else if (state.drawerSection === 'prior')      body = buildSecPrior(c);
     else if (state.drawerSection === 'status')     body = buildSecStatus(c);
     else if (state.drawerSection === 'background') body = buildSecBackground(c);
     else if (state.drawerSection === 'assessment') body = buildSecAssessment(c);
@@ -551,6 +568,34 @@ window.Pages['gachlat'] = function(query) {
         '<div><div style="font-size:11px;color:#888;margin-bottom:6px">סטטוס אבחון נוכחי</div>' + SS.statusBadge(c.assessmentStatus) + '</div>' +
       '</div>'
     );
+  }
+
+  /* Sections — קריטריונים קשיחים / גמישים (draft rules, explained per candidate) */
+  function buildSecCriteria(c, kind) {
+    var st = SS.criteriaStatus(c);
+    var list = st[kind];
+    var title = kind === 'hard' ? 'קריטריונים קשיחים — עמידה בהם מסמנת מועמד "חובה"' : 'קריטריונים גמישים — עמידה בהם מסמנת מועמד "רשות"';
+    var anyMet = list.some(function(k) { return k.met; });
+    return (
+      '<div>' +
+        '<div style="font-size:13px;font-weight:600;color:#1a3a5c;margin-bottom:6px">' + title + '</div>' +
+        '<div style="font-size:11px;color:#b45309;margin-bottom:10px">הקריטריונים בגרסת טיוטה — נדרש אישור צוות גחל"ת</div>' +
+        (list.length ? list.map(function(k) {
+          return '<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f0f0f0;font-size:13px"><span>' + Utils.escHtml(k.label) + '</span>' +
+            (k.met ? '<span class="badge badge-active">מתקיים</span>' : '<span class="badge badge-inactive">לא מתקיים</span>') + '</div>';
+        }).join('') : '<div style="color:#888">לא הוגדרו קריטריונים</div>') +
+        '<div style="margin-top:12px;font-size:12px;color:#555">' + (anyMet ? 'לפחות קריטריון אחד מתקיים.' : 'אף קריטריון מסוג זה אינו מתקיים.') + ' סיווג המועמדות: ' + SS.candidateBadge(c.candidateType) + '</div>' +
+      '</div>'
+    );
+  }
+
+  /* Section — אבחונים קודמים */
+  function buildSecPrior(c) {
+    var prior = c.priorAssessments || [];
+    if (!prior.length) return '<div style="color:#888;text-align:center;padding:40px 0;font-size:14px">אין אבחונים קודמים למועמד זה</div>';
+    return '<div>' + prior.map(function(p) {
+      return '<div style="padding:8px 0;border-bottom:1px solid #f0f0f0;font-size:13px"><div style="color:#888;font-size:11px">' + (p.date ? Utils.formatDate(p.date) : '') + ' — ' + Utils.escHtml(p.assessor || '') + '</div><div>' + Utils.escHtml(p.summary || '') + '</div></div>';
+    }).join('') + '</div>';
   }
 
   /* Section 3 — סטטוס התהליך */
@@ -920,7 +965,7 @@ window.Pages['gachlat'] = function(query) {
     });
     var clearBtn = Utils.el('gc-filter-clear');
     if (clearBtn) clearBtn.addEventListener('click', function() {
-      state.filters = { personalNumber: '', name: '', unit: '', serviceType: '', assessmentStatus: '', offense: '', assessor: '' };
+      state.filters = { personalNumber: '', name: '', unit: '', serviceType: '', assessmentStatus: '', offense: '', assessor: '', flex: {} };
       refresh();
     });
 
@@ -1055,6 +1100,8 @@ window.Pages['gachlat'] = function(query) {
       var el = Utils.el(maps[k]);
       if (el) f[k] = el.value;
     });
+    f.flex = {};
+    content.querySelectorAll('.gc-flex').forEach(function(el) { f.flex[el.getAttribute('data-flex')] = el.checked; });
     var data = getFiltered(state.activeTab, state.filters);
     var tbody = Utils.el('gc-tbody');
     if (!tbody) { refresh(); return; }
