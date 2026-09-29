@@ -36,6 +36,24 @@ window.Migrations = (function() {
         Storage.setCollection(Storage.KEYS.CANTEEN_PURCHASES, ps);
       },
     },
+    {
+      // a person may have only one ACTIVE prisoner file: soft-merge later duplicates into the earliest one
+      id: '2026-09-merge-duplicate-active-prisoner-files',
+      run() {
+        const K = Storage.KEYS;
+        const files = Storage.getCollection(K.PRISONER_FILES).filter(f => f.status === 'active').sort((a, b) => String(a.createdAt || a.admissionDate || '').localeCompare(String(b.createdAt || b.admissionDate || '')));
+        const keep = {}; const dups = [];
+        files.forEach(f => { if (keep[f.personId]) dups.push([f, keep[f.personId]]); else keep[f.personId] = f; });
+        dups.forEach(([d, k]) => {
+          const coords = Storage.getCollection(K.MASHLAT_COORDINATIONS);
+          coords.forEach(c => { if (c.prisonerFileId === d.id) { c.prisonerFileId = k.id; Storage.upsert(K.MASHLAT_COORDINATIONS, c); } });
+          Storage.getCollection(K.GACHLAT_CANDIDATES).forEach(c => { if (c.prisonerFileId === d.id) { c.prisonerFileId = k.id; Storage.upsert(K.GACHLAT_CANDIDATES, c); } });
+          Storage.getCollection(K.EVENT_REPORTS).forEach(e => { if (e.prisonerFileId === d.id) { e.prisonerFileId = k.id; Storage.upsert(K.EVENT_REPORTS, e); } });
+          Storage.upsert(K.PRISONER_FILES, Object.assign({}, d, { duplicateOf: k.id }));
+          Storage.softDelete(K.PRISONER_FILES, d.id);
+        });
+      },
+    },
   ];
 
   function runAll() {
