@@ -210,6 +210,14 @@ window.GachlatScreeningService = (function() {
       var changed = Object.keys(next).some(function(k) { return JSON.stringify(c[k]) !== JSON.stringify(next[k]); });
       if (changed) { Object.assign(c, next); Storage.upsert(Storage.KEYS.GACHLAT_CANDIDATES, c); fixed++; }
     });
+    // one candidate per prisoner file: keep the record with the most process history, soft-delete the rest
+    var byPf = {};
+    Storage.getCollection(Storage.KEYS.GACHLAT_CANDIDATES).forEach(function(c) { if (c.prisonerFileId) (byPf[c.prisonerFileId] = byPf[c.prisonerFileId] || []).push(c); });
+    Object.keys(byPf).forEach(function(k) {
+      var g = byPf[k]; if (g.length < 2) return;
+      g.sort(function(a, b) { return (b.history || []).length - (a.history || []).length || String(a.createdAt).localeCompare(String(b.createdAt)); });
+      g.slice(1).forEach(function(d) { Storage.softDelete(Storage.KEYS.GACHLAT_CANDIDATES, d.id); fixed++; });
+    });
     return fixed;
   }
 
