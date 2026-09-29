@@ -552,7 +552,7 @@ Pages['mashlat'] = function(query) {
     } else if (r.status === 'arrived') {
       primaryAction = '<button class="btn btn-primary btn-sm" style="font-size:11px;padding:3px 8px;white-space:nowrap" onclick="event.stopPropagation();window._msltIntake(\'' + r.id + '\')">פתח תיק</button>';
     } else if (r.status === 'no_show') {
-      primaryAction = '<button class="btn btn-secondary btn-sm" style="font-size:11px;padding:3px 8px;white-space:nowrap" onclick="event.stopPropagation();window._msltReschedule(\'' + r.id + '\')">טיפול</button>';
+      primaryAction = '<button class="btn btn-secondary btn-sm" style="font-size:11px;padding:3px 8px;white-space:nowrap" onclick="event.stopPropagation();window._msltReschedule(\'' + r.id + '\')">תיאום מחדש</button>';
     } else if (r.status === 'completed' && r.prisonerFileId) {
       primaryAction = '<button class="btn btn-ghost btn-sm" style="font-size:11px;padding:3px 8px;white-space:nowrap" onclick="event.stopPropagation();Router.navigate(\'/prisoner-file\',{id:\'' + r.prisonerFileId + '\'})">פתח תיק</button>';
     } else if (isActive) {
@@ -781,7 +781,7 @@ Pages['mashlat'] = function(query) {
     var req    = (prefill && prefill.requester) || {};
 
     Modal.open({
-      title: isEdit ? ('עריכת תיאום ' + prefill.coordinationNumber) : 'תיאום חדש',
+      title: (isEdit && prefill.id) ? ('עריכת תיאום ' + (prefill.coordinationNumber || '')) : (isEdit ? 'תיאום מחדש' : 'תיאום חדש'),
       size: 'lg',
       body:
 
@@ -836,13 +836,13 @@ Pages['mashlat'] = function(query) {
           '<div class="form-group"><label class="form-label">ימי כליאה <span class="required">*</span></label><input type="number" id="mc-days" class="form-control" min="1" max="3650" value="' + Utils.escHtml(String(prefill && prefill.incarcerationDays || '')) + '" placeholder="ימים"></div>' +
         '</div>' +
         '<div class="form-row form-row-2">' +
-          '<div class="form-group"><label class="form-label">סיבת העברה</label><select id="mc-transfer-reason" class="form-control"><option value="">אין / לא רלוונטי</option>' +
+          '<div class="form-group"><label class="form-label">סיבת העברה <span class="required">*</span></label><select id="mc-transfer-reason" class="form-control"><option value="">בחר סיבה</option><option value="none" ' + ((prefill && prefill.transferReason) === 'none' ? 'selected' : '') + '>אין / לא רלוונטי</option>' +
             '<option value="security_situation" ' + ((prefill && prefill.transferReason) === 'security_situation' ? 'selected' : '') + '>מצב ביטחוני</option>' +
             '<option value="living_conditions" '  + ((prefill && prefill.transferReason) === 'living_conditions'  ? 'selected' : '') + '>תנאי מחיה</option>' +
             '<option value="other" '              + ((prefill && prefill.transferReason) === 'other'              ? 'selected' : '') + '>אחר</option>' +
           '</select></div>' +
-          '<div class="form-group" id="mc-transfer-detail-group" style="display:' + ((prefill && prefill.transferReason) ? 'block' : 'none') + '">' +
-            '<label class="form-label">פירוט סיבת ההעברה</label>' +
+          '<div class="form-group" id="mc-transfer-detail-group">' +
+            '<label class="form-label">פירוט סיבת ההעברה <span class="required">*</span></label>' +
             '<input id="mc-transfer-detail" class="form-control" value="' + Utils.escHtml(prefill && prefill.transferReasonDetail || '') + '" placeholder="פרט...">' +
           '</div>' +
         '</div>' +
@@ -873,7 +873,7 @@ Pages['mashlat'] = function(query) {
     /* Transfer reason toggle */
     setTimeout(function() {
       var trEl = Utils.el('mc-transfer-reason'); var trdGrp = Utils.el('mc-transfer-detail-group');
-      if (trEl && trdGrp) trEl.onchange = function() { trdGrp.style.display = trEl.value ? 'block' : 'none'; };
+      
 
       /* Dest change — update facility override indicator in post-lookup panel */
       var destEl = Utils.el('mc-dest');
@@ -984,6 +984,8 @@ Pages['mashlat'] = function(query) {
         ['mc-dest', 'יעד כליאה'],
         ['mc-offense', 'עבירה / סיבת כליאה'],
         ['mc-days', 'ימי כליאה'],
+        ['mc-transfer-reason', 'סיבת העברה'],
+        ['mc-transfer-detail', 'פירוט סיבת ההעברה'],
         ['mc-coord-name', 'שם גורם מתאם'],
       ];
 
@@ -1000,17 +1002,6 @@ Pages['mashlat'] = function(query) {
           if (!firstInvalidEl) firstInvalidEl = el;
         }
       });
-
-      var transferReasonEl = Utils.el('mc-transfer-reason');
-      var transferDetailEl = Utils.el('mc-transfer-detail');
-      if (transferReasonEl && transferReasonEl.value && transferDetailEl) {
-        transferDetailEl.classList.remove('is-invalid');
-        if (!transferDetailEl.value.trim()) {
-          missing.push('פירוט סיבת ההעברה');
-          transferDetailEl.classList.add('is-invalid');
-          if (!firstInvalidEl) firstInvalidEl = transferDetailEl;
-        }
-      }
 
       if (missing.length) {
         Toast.error('יש למלא את כל שדות החובה: ' + missing.join(', '));
@@ -1070,7 +1061,7 @@ Pages['mashlat'] = function(query) {
         medicalNotes:        (Utils.el('mc-med')   || {}).value || '',
         generalNotes:        (Utils.el('mc-notes') || {}).value || '',
         transferReason:      transferReason || null,
-        transferReasonDetail: transferReason ? ((Utils.el('mc-transfer-detail') || {}).value || null) : null,
+        transferReasonDetail: ((Utils.el('mc-transfer-detail') || {}).value || '').trim() || null,
         rankingSnapshot:     rankSnapshot,
         facilityDecision: {
           recommendedFacility:      facRec.recommended,
@@ -1181,6 +1172,18 @@ Pages['mashlat'] = function(query) {
     window._msltCreateFile = function(coordId) {
       var coord = Storage.getById(Storage.KEYS.MASHLAT_COORDINATIONS, coordId);
       if (!coord) return;
+      var pidCheck = (Utils.el('intake-person-id') || {}).value || null;
+      var existingFile = pidCheck ? Storage.getCollection(Storage.KEYS.PRISONER_FILES).filter(function(f) { return f.personId === pidCheck && f.status === 'active'; })[0] : null;
+      if (existingFile) {
+        var linked = Object.assign({}, coord, { status: 'completed', prisonerFileId: existingFile.id, completedAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+        Storage.upsert(Storage.KEYS.MASHLAT_COORDINATIONS, linked);
+        Audit.log({ module: 'mashlat', action: 'update_status', entityType: 'coordination', entityId: coordId,
+          description: 'תיאום ' + coord.coordinationNumber + ' קושר לתיק כלוא פעיל קיים ' + (existingFile.fileNumber || existingFile.id) });
+        Modal.close();
+        Toast.info('לחייל כבר קיים תיק כלוא פעיל (' + (existingFile.fileNumber || '') + ') — התיאום קושר אליו ולא נפתח תיק נוסף');
+        Router.navigate('/prisoner-file', { id: existingFile.id });
+        return;
+      }
       var file = {
         id:               'pf_' + Utils.generateId(),
         fileNumber:       'PF-' + String(Math.floor(Math.random() * 90000) + 10000),
@@ -1198,6 +1201,7 @@ Pages['mashlat'] = function(query) {
         updatedAt:        new Date().toISOString(),
       };
       Storage.upsert(Storage.KEYS.PRISONER_FILES, file);
+      if (window.GachlatScreeningService) GachlatScreeningService.refresh();
       Audit.log({ module: 'incarceration', action: 'create', entityType: 'prisonerFile', entityId: file.id,
         description: 'פתיחת תיק כלוא ' + file.fileNumber + ' ממשל"ט ' + coord.coordinationNumber });
       var updatedCoord = Object.assign({}, coord, { status: 'completed', prisonerFileId: file.id, completedAt: new Date().toISOString(), updatedAt: new Date().toISOString() });

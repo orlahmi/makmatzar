@@ -958,6 +958,7 @@ Pages['prisoner-file'] = function(query) {
         status: 'active', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       };
       Storage.upsert(Storage.KEYS.PRISONER_FILES, file);
+      if (window.GachlatScreeningService) GachlatScreeningService.refresh();
       Audit.log({ module: 'incarceration', action: 'create', entityType: 'prisonerFile', entityId: file.id, description: `פתיחת תיק כלוא ${file.fileNumber}` });
       Modal.close();
       Toast.success('תיק כלוא נפתח');

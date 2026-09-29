@@ -155,6 +155,9 @@ window.Pages['gachlat'] = function(query) {
     DEMO.forEach(function(c) { if (!Storage.getById(KEY, c.id)) Storage.upsert(KEY, c); });
   })();
 
+  // one source of truth: repair identities from person/prisoner and sync missing candidates
+  SS.refresh();
+
   /* ── CONSTANTS ────────────────────────────────────────────────────────────── */
   var TABS = [
     { key: 'all',       label: 'הכל' },
@@ -253,7 +256,7 @@ window.Pages['gachlat'] = function(query) {
   function kpiCounts() {
     var all = getAll();
     return {
-      total:     all.filter(function(c) { return c.candidateType !== 'not_candidate'; }).length,
+      total:     all.length,
       mandatory: all.filter(function(c) { return c.candidateType === 'mandatory'; }).length,
       optional:  all.filter(function(c) { return c.candidateType === 'optional'; }).length,
       pending:   all.filter(function(c) { return c.assessmentStatus === 'new' || c.assessmentStatus === 'pending' || c.assessmentStatus === 'offered' || c.assessmentStatus === 'interested'; }).length,
@@ -393,7 +396,7 @@ window.Pages['gachlat'] = function(query) {
         rows += (
           '<tr class="gc-row" data-id="' + c.id + '" style="cursor:pointer;border-bottom:1px solid var(--color-border)">' +
           td(Utils.escHtml(c.personalNumber || ''), 'font-family:monospace;font-size:12px') +
-          td(Utils.escHtml(c.name || ''), 'font-weight:600') +
+          td(Utils.escHtml(c.name || '') + (c.orphaned ? ' <span class="badge badge-critical" title="' + Utils.escHtml(c.orphanReason || '') + '">יתומה</span>' : ''), 'font-weight:600') +
           td(Utils.escHtml(c.rank || '')) +
           td(Utils.escHtml(c.unit || '')) +
           td(c.age ? String(c.age) : '') +
@@ -1114,7 +1117,7 @@ window.Pages['gachlat'] = function(query) {
         rows += (
           '<tr class="gc-row" data-id="' + c.id + '" style="cursor:pointer;border-bottom:1px solid var(--color-border)">' +
           td(Utils.escHtml(c.personalNumber || ''), 'font-family:monospace;font-size:12px') +
-          td(Utils.escHtml(c.name || ''), 'font-weight:600') +
+          td(Utils.escHtml(c.name || '') + (c.orphaned ? ' <span class="badge badge-critical" title="' + Utils.escHtml(c.orphanReason || '') + '">יתומה</span>' : ''), 'font-weight:600') +
           td(Utils.escHtml(c.rank || '')) +
           td(Utils.escHtml(c.unit || '')) +
           td(c.age ? String(c.age) : '') +
