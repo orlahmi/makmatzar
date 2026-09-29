@@ -240,7 +240,7 @@ Pages['deserter-file'] = function(query) {
   }
 
   function renderHistory() {
-    const auditEntries = Storage.getCollection(Storage.KEYS.AUDIT).filter(a => a.entityId === fileId);
+    const auditEntries = Storage.getCollection(Storage.KEYS.AUDIT_ENTRIES).filter(a => a.entityId === fileId);
     return `
       <div class="card">
         <div class="card-header"><div class="card-title">היסטוריית שינויים</div></div>

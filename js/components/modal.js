@@ -103,8 +103,8 @@ window.Modal = (function() {
       setTimeout(() => {
         const okBtn = Utils.el('confirm-ok');
         const cancelBtn = Utils.el('confirm-cancel');
-        if (okBtn) okBtn.onclick = () => { close(); resolve(true); };
-        if (cancelBtn) cancelBtn.onclick = () => { close(); resolve(false); };
+        if (okBtn) okBtn.onclick = () => { resolve(true); close(); };
+        if (cancelBtn) cancelBtn.onclick = () => { resolve(false); close(); };
         if (okBtn) okBtn.focus();
       }, 10);
     });
@@ -138,9 +138,9 @@ window.Modal = (function() {
         if (ok) ok.onclick = () => {
           const val = input ? input.value.trim() : '';
           if (required && !val) { input.classList.add('is-invalid'); return; }
-          close(); resolve(val);
+          resolve(val); close();
         };
-        if (cancel) cancel.onclick = () => { close(); resolve(null); };
+        if (cancel) cancel.onclick = () => { resolve(null); close(); };
       }, 10);
     });
   }

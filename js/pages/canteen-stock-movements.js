@@ -1,4 +1,4 @@
-/* canteen-stock-movements.js — stock movements with approval workflow */
+/* canteen-stock-movements.js — תנועות מלאי בין קנטינות (tab per canteen; master/detail per legacy screen) */
 'use strict';
 
 window.Pages = window.Pages || {};
@@ -9,42 +9,45 @@ Pages['canteen-stock-movements'] = function(query) {
 
   const canApprove = Permissions.can('approveStock');
   const canCreate = Permissions.can('createPurchase');
-  const canteens = DEMO_UNITS.filter(u => u.type === 'canteen');
-  let filterStatus = '';
-  let filterSearch = '';
+  const canteens = CanteenData.canteens();
+  const cName = id => (canteens.find(c => c.id === id) || {}).name || '—';
+  const PAGE = 6;
+
+  let tab = 'all';           // 'all' or a canteen id
+  let filterApproved = '';   // '', 'yes', 'no'
   let filterDate = '';
+  let selectedId = null;
+  let page = 0, itemPage = 0;
+
+  const isApproved = CanteenData.isApproved;
 
   function getData() {
-    let movements = Storage.getCollection(Storage.KEYS.STOCK_MOVEMENTS);
-    if (filterStatus) movements = movements.filter(m => m.status === filterStatus);
-    if (filterDate) movements = movements.filter(m => (m.movementDate || m.date) === filterDate);
-    if (filterSearch) {
-      const q = filterSearch.toLowerCase();
-      movements = movements.filter(m => m.movementNumber.toLowerCase().includes(q) || m.movementType.toLowerCase().includes(q));
-    }
-    return movements.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    let list = Storage.getCollection(Storage.KEYS.STOCK_MOVEMENTS);
+    if (tab !== 'all') list = list.filter(m => m.sourceCanteenId === tab || m.destCanteenId === tab);
+    if (filterApproved === 'yes') list = list.filter(isApproved);
+    if (filterApproved === 'no') list = list.filter(m => !isApproved(m));
+    if (filterDate) list = list.filter(m => (m.movementDate || m.date) === filterDate);
+    return list.sort((a, b) => (b.movementDate || '').localeCompare(a.movementDate || ''));
   }
 
-  function getProducts() {
-    return Storage.getCollection(Storage.KEYS.CANTEEN_PRODUCTS) || [];
-  }
+  const pager = (total, cur, fn) => {
+    const pages = Math.max(1, Math.ceil(total / PAGE));
+    const from = total ? cur * PAGE + 1 : 0, to = Math.min(total, (cur + 1) * PAGE);
+    return `<div style="display:flex;gap:8px;align-items:center;justify-content:center;padding:8px;font-size:12px">
+      <button class="btn btn-secondary btn-sm" ${cur <= 0 ? 'disabled' : ''} onclick="${fn}(${cur - 1})">›</button>
+      <span>${from}–${to} מתוך ${total}</span>
+      <button class="btn btn-secondary btn-sm" ${cur >= pages - 1 ? 'disabled' : ''} onclick="${fn}(${cur + 1})">‹</button></div>`;
+  };
 
   function renderPage() {
     const data = getData();
-    const products = getProducts();
-
-    // Current stock summary
-    const stockMap = {};
-    products.forEach(p => { stockMap[p.id] = { ...p, currentStock: p.currentStock || 0 }; });
-    // Apply completed movements
-    Storage.getCollection(Storage.KEYS.STOCK_MOVEMENTS).filter(m => m.status === 'approved').forEach(m => {
-      (m.items || []).forEach(item => {
-        if (stockMap[item.productId]) {
-          if (m.movementType === 'in') stockMap[item.productId].currentStock += item.quantity;
-          else if (m.movementType === 'out') stockMap[item.productId].currentStock -= item.quantity;
-        }
-      });
-    });
+    if (page * PAGE >= data.length) page = 0;
+    const rows = data.slice(page * PAGE, page * PAGE + PAGE);
+    const selected = data.find(m => m.id === selectedId) || null;
+    if (!selected) selectedId = null;
+    const items = selected ? CanteenData.movementItems(selected) : [];
+    if (itemPage * PAGE >= items.length) itemPage = 0;
+    const products = CanteenData.products();
 
     content.innerHTML = `
       <div class="page-wrapper">
@@ -55,271 +58,195 @@ Pages['canteen-stock-movements'] = function(query) {
           ${canCreate ? `<button class="btn btn-primary" id="btn-new">${Utils.icon('plus', 14)} תנועה חדשה</button>` : ''}
         </div>
 
-        <!-- Stock summary -->
-        <div class="table-panel" style="margin-bottom:20px">
-          <div class="table-panel-header">מלאי נוכחי</div>
-          <div style="padding:0">
-            <table class="data-table">
-              <thead><tr><th>מוצר</th><th>קטגוריה</th><th>מחיר</th><th>מלאי</th><th>סטטוס</th></tr></thead>
-              <tbody>
-                ${products.map(p => {
-                  const stock = stockMap[p.id] ? stockMap[p.id].currentStock : (p.currentStock || 0);
-                  const minStock = p.minStock || 5;
-                  const stockStatus = stock <= 0 ? 'danger' : stock <= minStock ? 'warning' : 'success';
-                  return `<tr>
-                    <td>${Utils.escHtml(p.name)}</td>
-                    <td>${Utils.escHtml(p.category || '—')}</td>
-                    <td>₪${Utils.formatCurrency(p.price)}</td>
-                    <td><strong>${stock}</strong> יח'</td>
-                    <td>${stock <= 0 ? '<span class="badge badge-danger">אזל</span>' : stock <= minStock ? '<span class="badge badge-warning">נמוך</span>' : '<span class="badge badge-success">תקין</span>'}</td>
-                  </tr>`;
-                }).join('')}
-              </tbody>
-            </table>
-          </div>
+        <div class="tabs-nav" role="tablist" id="sm-tabs" style="margin-bottom:12px">
+          ${[{ id: 'all', name: 'כל הקנטינות' }, ...canteens].map(c => `<button type="button" role="tab" class="tab-btn ${tab === c.id ? 'active' : ''}" data-canteen-tab="${c.id}">${Utils.escHtml(c.name)}</button>`).join('')}
         </div>
 
-        <!-- Filter panel -->
         <div class="retrieval-panel">
-          <div class="retrieval-panel-header">סינון</div>
           <div class="retrieval-grid">
-            <div class="form-group">
-              <label class="form-label">סטטוס</label>
-              <div style="display:flex;gap:6px;flex-wrap:wrap;padding-top:4px">
-                ${[{id:'',label:'הכל'},{id:'pending',label:'ממתין לאישור'},{id:'approved',label:'אושר'},{id:'rejected',label:'נדחה'},{id:'completed',label:'הושלם'},{id:'draft',label:'טיוטה'}].map(s => `
-                  <button class="btn btn-sm ${filterStatus === s.id ? 'btn-primary' : 'btn-secondary'}" onclick="window._smFilterStatus('${s.id}')">${Utils.escHtml(s.label)}</button>
-                `).join('')}
-              </div>
-            </div>
-            <div class="form-group">
-              <label class="form-label">תאריך תנועה</label>
-              <input type="date" class="form-control" id="sm-f-date" value="${filterDate}">
-            </div>
-            <div class="form-group">
-              <label class="form-label">חיפוש</label>
-              <input class="form-control" id="sm-search" placeholder="מספר תנועה..." value="${Utils.escHtml(filterSearch)}">
-            </div>
+            <div class="form-group"><label class="form-label">אושר</label>
+              <select class="form-control" id="f-approved">
+                <option value="">הכל</option>
+                <option value="yes" ${filterApproved === 'yes' ? 'selected' : ''}>כן</option>
+                <option value="no" ${filterApproved === 'no' ? 'selected' : ''}>לא</option></select></div>
+            <div class="form-group"><label class="form-label">תאריך תנועה</label><input type="date" class="form-control" id="f-date" value="${filterDate}"></div>
+            <div class="form-group" style="display:flex;align-items:flex-end;gap:8px">
+              <button class="btn btn-primary" id="f-apply">החל</button><button class="btn btn-secondary" id="f-reset">נקה</button></div>
           </div>
         </div>
 
-        <!-- Movements table panel -->
         <div class="table-panel">
-          <div class="table-panel-header">תנועות מלאי</div>
-          <div id="sm-table"></div>
+          <div class="table-panel-header"><span>ראשי תנועות מלאי${tab !== 'all' ? ' — ' + Utils.escHtml(cName(tab)) : ''}</span><span style="font-size:12px;color:var(--color-text-muted)">${data.length} תנועות</span></div>
+          <table class="data-table">
+            <thead><tr><th>מס' תנועה</th><th>קנטינה מקבלת</th><th>קנטינה מופקת</th><th>תאריך תנועה</th><th>מאשר</th><th>אושר</th><th>סטטוס</th></tr></thead>
+            <tbody>
+              ${rows.length === 0 ? `<tr><td colspan="7" style="padding:32px;text-align:center;color:var(--color-text-muted)">אין תנועות מלאי${tab !== 'all' ? ' עבור קנטינה זו' : ''}</td></tr>` :
+                rows.map(m => `<tr class="${selectedId === m.id ? 'row-selected' : ''}" style="cursor:pointer" onclick="window._smSelect('${m.id}')">
+                  <td class="td-number">${Utils.escHtml(m.movementNumber)}</td>
+                  <td>${Utils.escHtml(m.destCanteenName || cName(m.destCanteenId))}</td>
+                  <td>${Utils.escHtml(m.sourceCanteenName || cName(m.sourceCanteenId))}</td>
+                  <td>${Utils.formatDate(m.movementDate)}</td>
+                  <td>${Utils.escHtml(m.approverName || '—')}</td>
+                  <td>${isApproved(m) ? '<span class="badge badge-success">כן</span>' : '<span class="badge badge-draft">לא</span>'}</td>
+                  <td>${StatusBadge.render(m.status)}</td></tr>`).join('')}
+            </tbody>
+          </table>
+          ${pager(data.length, page, 'window._smPage')}
         </div>
+
+        <div class="table-panel" style="margin-top:16px">
+          <div class="table-panel-header">
+            <span>פירוט תנועות מלאי בין קנטינות${selected ? ' — ' + Utils.escHtml(selected.movementNumber) : ''}</span>
+            <span style="display:flex;gap:8px">
+              ${selected && canCreate && !isApproved(selected) ? `<button class="btn btn-secondary btn-sm" id="btn-add-item">${Utils.icon('plus', 13)} הוסף פריט</button>` : ''}
+              ${selected && canApprove && !isApproved(selected) && selected.status !== 'rejected' ? `<button class="btn btn-primary btn-sm" id="btn-approve">${Utils.icon('check', 13)} אשר תנועה</button><button class="btn btn-secondary btn-sm" id="btn-reject">דחה</button>` : ''}
+            </span>
+          </div>
+          ${!selected ? `<div style="padding:24px;text-align:center;color:var(--color-text-muted)">בחר תנועה מהטבלה הראשית להצגת הפירוט</div>` : `
+          <div style="padding:8px 16px;font-size:12px;color:var(--color-text-muted)">מ-${Utils.escHtml(selected.sourceCanteenName || cName(selected.sourceCanteenId))} אל ${Utils.escHtml(selected.destCanteenName || cName(selected.destCanteenId))}${selected.rejectionReason ? ' • סיבת דחייה: ' + Utils.escHtml(selected.rejectionReason) : ''}</div>
+          <table class="data-table">
+            <thead><tr><th>קוד מוצר</th><th>תיאור מוצר</th><th>כמות מבוקשת</th><th>כמות מאושרת</th><th>הערות</th></tr></thead>
+            <tbody>
+              ${items.slice(itemPage * PAGE, itemPage * PAGE + PAGE).map(it => `<tr>
+                <td class="td-id">${Utils.escHtml(it.productCode || '—')}</td><td>${Utils.escHtml(it.productName || '—')}</td>
+                <td>${Number(it.requestedQty) || 0}</td><td>${it.approvedQty != null ? Number(it.approvedQty) : '—'}</td><td>${Utils.escHtml(it.notes || '—')}</td></tr>`).join('')}
+              ${items.length === 0 ? '<tr><td colspan="5" style="text-align:center;padding:16px;color:var(--color-text-muted)">אין פריטים בתנועה</td></tr>' : ''}
+            </tbody>
+          </table>
+          ${pager(items.length, itemPage, 'window._smItemPage')}`}
+        </div>
+
+        ${tab !== 'all' ? `
+        <div class="table-panel" style="margin-top:16px">
+          <div class="table-panel-header">מלאי נוכחי — ${Utils.escHtml(cName(tab))}</div>
+          <table class="data-table">
+            <thead><tr><th>קוד</th><th>מוצר</th><th>מחיר</th><th>מלאי</th><th>מצב</th></tr></thead>
+            <tbody>${products.map(p => {
+              const s = CanteenData.stockOf(p.code, tab);
+              return `<tr><td class="td-id">${Utils.escHtml(p.code)}</td><td>${Utils.escHtml(p.name)}</td><td>${CanteenData.money(p.price)}</td><td><strong>${s}</strong></td>
+                <td>${s <= 0 ? '<span class="badge badge-danger">אזל</span>' : s <= (p.minStock || 20) ? '<span class="badge badge-warning">נמוך</span>' : '<span class="badge badge-success">תקין</span>'}</td></tr>`;
+            }).join('')}</tbody>
+          </table>
+        </div>` : ''}
 
         ${Utils.classificationFooter()}
       </div>
     `;
 
-    DataTable.create({
-      containerId: 'sm-table',
-      data,
-      rowKey: 'id',
-      columns: [
-        { key: 'movementNumber', label: 'מספר תנועה', tdClass: 'td-number' },
-        { key: 'movementDate', label: 'תאריך', render: v => Utils.formatDate(v) },
-        { key: 'sourceCanteenName', label: 'מקור', render: v => Utils.escHtml(v || '—') },
-        { key: 'destCanteenName', label: 'יעד', render: v => Utils.escHtml(v || '—') },
-        { key: 'items', label: 'פריטים', render: v => (v || []).length + ' פריטים' },
-        { key: 'status', label: 'סטטוס', render: v => StatusBadge.renderStockLock(v) },
-        { key: 'creatorName', label: 'נוצר ע"י', render: v => Utils.escHtml(v || '—') },
-      ],
-      actions: (row) => `
-        <button class="row-action-btn" onclick="window.viewMovement('${row.id}')">${Utils.icon('view', 14)}</button>
-        ${canApprove && row.status === 'pending' ? `
-          <button class="row-action-btn" onclick="window.approveMovement('${row.id}')" title="אשר">${Utils.icon('check', 14)}</button>
-          <button class="row-action-btn danger" onclick="window.rejectMovement('${row.id}')" title="דחה">${Utils.icon('x', 14)}</button>
-        ` : ''}
-      `,
-      emptyMessage: 'אין תנועות מלאי',
-    });
-
-    Utils.el('sm-search').addEventListener('input', Utils.debounce(() => { filterSearch = Utils.el('sm-search').value; renderPage(); }, 300));
-    Utils.el('sm-f-date').addEventListener('change', () => { filterDate = Utils.el('sm-f-date').value; renderPage(); });
-    window._smFilterStatus = (s) => { filterStatus = s; renderPage(); };
+    window._smPage = n => { page = n; renderPage(); };
+    window._smItemPage = n => { itemPage = n; renderPage(); };
+    window._smSelect = id => { selectedId = id; itemPage = 0; renderPage(); };
+    content.querySelectorAll('[data-canteen-tab]').forEach(b => b.onclick = () => { tab = b.dataset.canteenTab; page = 0; selectedId = null; renderPage(); });
+    Utils.el('f-apply').onclick = () => { filterApproved = Utils.el('f-approved').value; filterDate = Utils.el('f-date').value; page = 0; renderPage(); };
+    Utils.el('f-reset').onclick = () => { filterApproved = ''; filterDate = ''; page = 0; renderPage(); };
     Utils.el('btn-export').onclick = () => {
-      const rows = getData().map(m => [m.movementNumber, m.date, m.movementType, m.supplier, (m.items || []).length, m.status]);
-      Utils.exportCsv('stock_movements.csv', ['מספר', 'תאריך', 'סוג', 'ספק', 'פריטים', 'סטטוס'], rows);
+      const csv = getData().map(m => [m.movementNumber, m.sourceCanteenName || cName(m.sourceCanteenId), m.destCanteenName || cName(m.destCanteenId), m.movementDate, isApproved(m) ? 'כן' : 'לא']);
+      Utils.exportCsv('stock_movements.csv', ['מספר', 'מופקת', 'מקבלת', 'תאריך', 'אושר'], csv);
     };
-    if (Utils.el('btn-new')) Utils.el('btn-new').onclick = () => showNewMovementModal(products);
+    if (Utils.el('btn-new')) Utils.el('btn-new').onclick = showNewMovement;
+    if (Utils.el('btn-add-item')) Utils.el('btn-add-item').onclick = () => showAddItem(selected);
+    if (Utils.el('btn-approve')) Utils.el('btn-approve').onclick = () => approve(selected, items);
+    if (Utils.el('btn-reject')) Utils.el('btn-reject').onclick = () => reject(selected);
+  }
 
-    window.viewMovement = (id) => {
-      const m = Storage.getById(Storage.KEYS.STOCK_MOVEMENTS, id);
-      if (!m) return;
-      const items = m.items || [];
-      Modal.open({
-        title: `תנועת מלאי — ${m.movementNumber}`,
-        size: 'lg',
-        body: `
-          <div class="info-list" style="margin-bottom:12px">
-            <div class="info-list-row"><div class="info-list-label">תאריך</div><div>${Utils.formatDate(m.movementDate || m.date)}</div></div>
-            <div class="info-list-row"><div class="info-list-label">מקור</div><div>${Utils.escHtml(m.sourceCanteenName || '—')}</div></div>
-            <div class="info-list-row"><div class="info-list-label">יעד</div><div>${Utils.escHtml(m.destCanteenName || '—')}</div></div>
-            <div class="info-list-row"><div class="info-list-label">סטטוס</div><div>${StatusBadge.renderStockLock(m.status)}</div></div>
-            <div class="info-list-row"><div class="info-list-label">הערות</div><div>${Utils.escHtml(m.rejectionReason || m.notes || '—')}</div></div>
-          </div>
-          <table class="data-table">
-            <thead><tr><th>מוצר</th><th>כמות</th><th>מחיר יח'</th><th>סה"כ</th></tr></thead>
-            <tbody>
-              ${items.map(item => `<tr>
-                <td>${Utils.escHtml(item.productName || item.productId)}</td>
-                <td>${item.quantity}</td>
-                <td>₪${Utils.formatCurrency(item.unitPrice || 0)}</td>
-                <td>₪${Utils.formatCurrency(item.quantity * (item.unitPrice || 0))}</td>
-              </tr>`).join('')}
-              <tr style="font-weight:700"><td colspan="3">סה"כ</td><td>₪${Utils.formatCurrency(m.totalValue || 0)}</td></tr>
-            </tbody>
-          </table>
-        `,
-      });
+  function persistItem(mov, item) {
+    const all = Storage.getCollection(Storage.KEYS.STOCK_MOVEMENT_ITEMS);
+    all.push(item);
+    Storage.setCollection(Storage.KEYS.STOCK_MOVEMENT_ITEMS, all);
+    mov.items = (mov.items || []).concat([item.id]);
+    mov.itemCount = mov.items.length;
+    mov.updatedAt = new Date().toISOString();
+    Storage.upsert(Storage.KEYS.STOCK_MOVEMENTS, mov);
+  }
+
+  function showAddItem(mov) {
+    const products = CanteenData.products();
+    Modal.open({
+      title: 'הוסף פריט לתנועה ' + mov.movementNumber,
+      body: `<div class="form-row form-row-2">
+        <div class="form-group"><label class="form-label">מוצר <span class="required">*</span></label>
+          <select id="ai-product" class="form-control"><option value="">בחר מוצר</option>${products.map(p => `<option value="${p.code}">${Utils.escHtml(p.code + ' — ' + p.name)}</option>`).join('')}</select></div>
+        <div class="form-group"><label class="form-label">כמות <span class="required">*</span></label><input type="number" id="ai-qty" class="form-control" min="1" value="1"></div>
+        <div class="form-group" style="grid-column:1/-1"><label class="form-label">הערות</label><input id="ai-notes" class="form-control"></div></div>
+        <div id="ai-stock" style="font-size:12px;color:var(--color-text-muted)"></div>`,
+      footer: `<button class="btn btn-secondary" onclick="Modal.close()">ביטול</button><button class="btn btn-primary" id="ai-save">הוסף</button>`,
+    });
+    Utils.el('ai-product').onchange = () => {
+      const code = Utils.el('ai-product').value;
+      Utils.el('ai-stock').textContent = code ? 'מלאי בקנטינה המפיקה: ' + CanteenData.stockOf(code, mov.sourceCanteenId) : '';
     };
-
-    window.approveMovement = async (id) => {
-      const ok = await Modal.confirm({ title: 'אישור תנועת מלאי', message: 'האם לאשר תנועת מלאי זו?', type: 'success' });
-      if (!ok) return;
-      const m = Storage.getById(Storage.KEYS.STOCK_MOVEMENTS, id);
-      if (!m) return;
-      m.status = 'approved';
-      m.approvedAt = new Date().toISOString();
-      m.approvedBy = Auth.getCurrentUser() ? Auth.getCurrentUser().firstName + ' ' + Auth.getCurrentUser().lastName : '';
-      m.updatedAt = new Date().toISOString();
-      Storage.upsert(Storage.KEYS.STOCK_MOVEMENTS, m);
-      Audit.log({ module: 'canteen', action: 'approve', entityType: 'stockMovement', entityId: id, description: `אישור תנועת מלאי ${m.movementNumber}` });
-      Toast.success('התנועה אושרה');
-      renderPage();
-    };
-
-    window.rejectMovement = async (id) => {
-      const reason = await Modal.prompt({ title: 'דחיית תנועת מלאי', message: 'סיבת דחייה:' });
-      if (!reason) return;
-      const m = Storage.getById(Storage.KEYS.STOCK_MOVEMENTS, id);
-      if (!m) return;
-      m.status = 'rejected';
-      m.rejectionReason = reason;
-      m.updatedAt = new Date().toISOString();
-      Storage.upsert(Storage.KEYS.STOCK_MOVEMENTS, m);
-      Audit.log({ module: 'canteen', action: 'reject', entityType: 'stockMovement', entityId: id, description: `דחיית תנועת מלאי ${m.movementNumber}: ${reason}` });
-      Toast.info('התנועה נדחתה');
-      renderPage();
+    Utils.el('ai-save').onclick = () => {
+      const code = Utils.el('ai-product').value; const qty = parseInt(Utils.el('ai-qty').value, 10);
+      if (!code) { Toast.error('יש לבחור מוצר'); return; }
+      if (!qty || qty < 1) { Toast.error('כמות לא תקינה'); return; }
+      if (qty > CanteenData.stockOf(code, mov.sourceCanteenId)) { Toast.error('הכמות גדולה מהמלאי בקנטינה המפיקה'); return; }
+      const dup = CanteenData.movementItems(mov).find(i => i.productCode === code);
+      if (dup) { Toast.error('המוצר כבר קיים בתנועה'); return; }
+      const p = CanteenData.findProduct(code);
+      persistItem(mov, { id: mov.id + '_i' + Date.now(), movementId: mov.id, productCode: p.code, productName: p.name, requestedQty: qty, approvedQty: null, receivedQty: null, notes: Utils.el('ai-notes').value.trim() });
+      Audit.log({ module: 'canteen', action: 'update', entityType: 'stockMovement', entityId: mov.id, description: `נוסף פריט ${p.name} לתנועה ${mov.movementNumber}` });
+      Modal.close(); Toast.success('הפריט נוסף'); renderPage();
     };
   }
 
-  function showNewMovementModal(products) {
-    let cartItems = [];
+  function showNewMovement() {
     Modal.open({
       title: 'תנועת מלאי חדשה',
-      size: 'lg',
-      body: `
-        <div class="form-row form-row-2">
-          <div class="form-group">
-            <label class="form-label">סוג תנועה</label>
-            <select id="sm-type" class="form-control">
-              <option value="in">קבלת סחורה</option>
-              <option value="out">הוצאת מלאי</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label">תאריך תנועה</label>
-            <input type="date" id="sm-date" class="form-control" value="${Utils.today()}">
-          </div>
-          <div class="form-group">
-            <label class="form-label">קנטינה מקור</label>
-            <select id="sm-source" class="form-control">
-              <option value="">בחר קנטינה</option>
-              ${canteens.map(c => `<option value="${c.id}">${Utils.escHtml(c.name)}</option>`).join('')}
-            </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label">קנטינה יעד</label>
-            <select id="sm-dest" class="form-control">
-              <option value="">בחר קנטינה</option>
-              ${canteens.map(c => `<option value="${c.id}">${Utils.escHtml(c.name)}</option>`).join('')}
-            </select>
-          </div>
-        </div>
-        <div style="display:flex;gap:8px;margin:12px 0">
-          <select id="sm-product" class="form-control">
-            <option value="">בחר מוצר</option>
-            ${products.map(p => `<option value="${p.id}" data-price="${p.price}">${Utils.escHtml(p.name)}</option>`).join('')}
-          </select>
-          <input type="number" id="sm-qty" class="form-control" value="1" min="1" style="width:80px">
-          <button type="button" class="btn btn-secondary" onclick="window._smAddItem()">הוסף</button>
-        </div>
-        <div id="sm-cart"><div style="color:var(--color-text-muted);font-size:var(--font-size-sm)">פריטים ריקים</div></div>
-        <div class="form-group" style="margin-top:12px">
-          <label class="form-label">הערות</label>
-          <textarea id="sm-notes" class="form-control" rows="2"></textarea>
-        </div>
-      `,
-      footer: `
-        <button class="btn btn-secondary" onclick="Modal.close()">ביטול</button>
-        <button class="btn btn-primary" onclick="window._saveMovement()">שלח לאישור</button>
-      `,
+      body: `<div class="form-row form-row-2">
+        <div class="form-group"><label class="form-label">קנטינה מופקת (מקור) <span class="required">*</span></label>
+          <select id="nm-src" class="form-control"><option value="">בחר</option>${canteens.map(c => `<option value="${c.id}" ${tab === c.id ? 'selected' : ''}>${Utils.escHtml(c.name)}</option>`).join('')}</select></div>
+        <div class="form-group"><label class="form-label">קנטינה מקבלת (יעד) <span class="required">*</span></label>
+          <select id="nm-dst" class="form-control"><option value="">בחר</option>${canteens.map(c => `<option value="${c.id}">${Utils.escHtml(c.name)}</option>`).join('')}</select></div>
+        <div class="form-group"><label class="form-label">תאריך תנועה <span class="required">*</span></label><input type="date" id="nm-date" class="form-control" value="${Utils.today()}"></div>
+      </div><p style="font-size:12px;color:var(--color-text-muted)">לאחר יצירת התנועה ניתן להוסיף פריטים ולהגיש לאישור.</p>`,
+      footer: `<button class="btn btn-secondary" onclick="Modal.close()">ביטול</button><button class="btn btn-primary" id="nm-save">צור תנועה</button>`,
     });
-
-    function renderSmCart() {
-      const el = Utils.el('sm-cart');
-      if (!cartItems.length) { el.innerHTML = '<div style="color:var(--color-text-muted);font-size:var(--font-size-sm)">פריטים ריקים</div>'; return; }
-      const total = cartItems.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
-      el.innerHTML = `<table class="data-table" style="font-size:var(--font-size-sm)">
-        <thead><tr><th>מוצר</th><th>כמות</th><th>מחיר</th><th>סה"כ</th><th></th></tr></thead>
-        <tbody>
-          ${cartItems.map((item, i) => `<tr>
-            <td>${Utils.escHtml(item.productName)}</td>
-            <td>${item.quantity}</td>
-            <td>₪${Utils.formatCurrency(item.unitPrice)}</td>
-            <td>₪${Utils.formatCurrency(item.quantity * item.unitPrice)}</td>
-            <td><button class="row-action-btn danger" onclick="window._smRemoveItem(${i})">${Utils.icon('x', 12)}</button></td>
-          </tr>`).join('')}
-          <tr style="font-weight:700"><td colspan="3">סה"כ</td><td>₪${Utils.formatCurrency(total)}</td><td></td></tr>
-        </tbody>
-      </table>`;
-    }
-
-    window._smAddItem = () => {
-      const sel = Utils.el('sm-product');
-      if (!sel.value) return;
-      const opt = sel.selectedOptions[0];
-      const price = parseFloat(opt.dataset.price) || 0;
-      const qty = parseInt(Utils.el('sm-qty').value) || 1;
-      const existing = cartItems.find(i => i.productId === sel.value);
-      if (existing) existing.quantity += qty;
-      else cartItems.push({ productId: sel.value, productName: opt.text, unitPrice: price, quantity: qty });
-      renderSmCart();
-    };
-
-    window._smRemoveItem = (i) => { cartItems.splice(i, 1); renderSmCart(); };
-
-    window._saveMovement = () => {
-      if (!cartItems.length) { Toast.error('יש להוסיף פריטים'); return; }
+    Utils.el('nm-save').onclick = () => {
+      const src = Utils.el('nm-src').value, dst = Utils.el('nm-dst').value, date = Utils.el('nm-date').value;
+      if (!src || !dst || !date) { Toast.error('יש למלא קנטינה מופקת, מקבלת ותאריך'); return; }
+      if (src === dst) { Toast.error('הקנטינה המופקת והמקבלת חייבות להיות שונות'); return; }
       const u = Auth.getCurrentUser();
-      const total = cartItems.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
-      const sourceCanteen = UNIT_MAP[Utils.el('sm-source').value];
-      const destCanteen = UNIT_MAP[Utils.el('sm-dest').value];
-      const m = {
-        id: 'sm_' + Utils.generateId(),
-        movementNumber: 'SM-' + String(Math.floor(Math.random() * 9000) + 1000),
-        movementType: Utils.el('sm-type').value,
-        date: Utils.el('sm-date').value,
-        movementDate: Utils.el('sm-date').value,
-        sourceCanteenId: sourceCanteen ? sourceCanteen.id : '',
-        sourceCanteenName: sourceCanteen ? sourceCanteen.name : '',
-        destCanteenId: destCanteen ? destCanteen.id : '',
-        destCanteenName: destCanteen ? destCanteen.name : '',
-        notes: Utils.el('sm-notes').value,
-        items: cartItems,
-        totalValue: total,
-        status: 'pending',
-        createdBy: u ? u.firstName + ' ' + u.lastName : '',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+      const num = 'MOV-' + (Math.max(3000, ...Storage.getCollection(Storage.KEYS.STOCK_MOVEMENTS).map(m => parseInt(String(m.movementNumber).replace(/\D/g, ''), 10) || 0)) + 1);
+      const mov = {
+        id: 'sm_' + Utils.generateId(), movementNumber: num, sourceCanteenId: src, sourceCanteenName: cName(src), destCanteenId: dst, destCanteenName: cName(dst),
+        movementDate: date, creatorId: u ? u.id : '', creatorName: u ? u.firstName + ' ' + u.lastName : '', status: 'pending',
+        approverName: null, approvalDate: null, itemCount: 0, items: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       };
-      Storage.upsert(Storage.KEYS.STOCK_MOVEMENTS, m);
-      Audit.log({ module: 'canteen', action: 'create', entityType: 'stockMovement', entityId: m.id, description: `תנועת מלאי ${m.movementNumber} — ₪${Utils.formatCurrency(total)}` });
-      Modal.close();
-      Toast.success('התנועה נשלחה לאישור');
-      renderPage();
+      Storage.upsert(Storage.KEYS.STOCK_MOVEMENTS, mov);
+      Audit.log({ module: 'canteen', action: 'create', entityType: 'stockMovement', entityId: mov.id, description: `תנועת מלאי ${num}` });
+      Modal.close(); Toast.success('התנועה נוצרה'); selectedId = mov.id; page = 0; renderPage();
+    };
+  }
+
+  async function approve(mov, items) {
+    if (!items.length) { Toast.error('לא ניתן לאשר תנועה ללא פריטים'); return; }
+    const short = items.find(i => (Number(i.requestedQty) || 0) > CanteenData.stockOf(i.productCode, mov.sourceCanteenId));
+    if (short) { Toast.error('אין מלאי מספיק ב"' + short.productName + '" בקנטינה המפיקה'); return; }
+    const ok = await Modal.confirm({ title: 'אישור תנועת מלאי', message: 'לאשר את התנועה ' + mov.movementNumber + '? המלאי יועבר בין הקנטינות.', type: 'success' });
+    if (!ok) return;
+    const u = Auth.getCurrentUser();
+    const all = Storage.getCollection(Storage.KEYS.STOCK_MOVEMENT_ITEMS);
+    items.forEach(it => { const s = all.find(x => x.id === it.id); if (s) s.approvedQty = s.requestedQty; });
+    Storage.setCollection(Storage.KEYS.STOCK_MOVEMENT_ITEMS, all);
+    mov.status = 'approved'; mov.approverName = u ? u.firstName + ' ' + u.lastName : ''; mov.approverId = u ? u.id : '';
+    mov.approvalDate = Utils.today(); mov.updatedAt = new Date().toISOString();
+    Storage.upsert(Storage.KEYS.STOCK_MOVEMENTS, mov);
+    Audit.log({ module: 'canteen', action: 'approve', entityType: 'stockMovement', entityId: mov.id, description: `אישור תנועת מלאי ${mov.movementNumber}` });
+    Toast.success('התנועה אושרה'); renderPage();
+  }
+
+  function reject(mov) {
+    Modal.open({
+      title: 'דחיית תנועה', body: `<div class="form-group"><label class="form-label">סיבת דחייה <span class="required">*</span></label><input id="rj-reason" class="form-control"></div>`,
+      footer: `<button class="btn btn-secondary" onclick="Modal.close()">ביטול</button><button class="btn btn-primary" id="rj-save">דחה</button>`,
+    });
+    Utils.el('rj-save').onclick = () => {
+      const r = Utils.el('rj-reason').value.trim();
+      if (!r) { Toast.error('יש להזין סיבת דחייה'); return; }
+      mov.status = 'rejected'; mov.rejectionReason = r; mov.updatedAt = new Date().toISOString();
+      Storage.upsert(Storage.KEYS.STOCK_MOVEMENTS, mov);
+      Audit.log({ module: 'canteen', action: 'reject', entityType: 'stockMovement', entityId: mov.id, description: `דחיית תנועה ${mov.movementNumber}` });
+      Modal.close(); Toast.success('התנועה נדחתה'); renderPage();
     };
   }
 

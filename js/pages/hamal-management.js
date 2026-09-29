@@ -10,11 +10,17 @@ Pages['hamal-management'] = function(query) {
   const user = Auth.getCurrentUser();
   let filterDate = Utils.today();
   let filterCategory = '';
+  let filterKind = '';
   let filterSearch = '';
+
+  function kindBadge(k) {
+    return k === 'operational' ? '<span class="badge badge-danger">מבצעי</span>' : k === 'administrative' ? '<span class="badge badge-info">מנהלתי</span>' : '<span class="badge badge-draft">לא סווג</span>';
+  }
 
   function getData() {
     let entries = Storage.getCollection(Storage.KEYS.HAMAL_ENTRIES);
     if (filterDate) entries = entries.filter(e => e.date === filterDate);
+    if (filterKind) entries = entries.filter(e => e.entryKind === filterKind);
     if (filterCategory) entries = entries.filter(e => e.category === filterCategory);
     if (filterSearch) {
       const q = filterSearch.toLowerCase();
@@ -46,6 +52,14 @@ Pages['hamal-management'] = function(query) {
             <div class="form-group">
               <label class="form-label">תאריך</label>
               <input type="date" class="form-control" id="f-date" value="${filterDate}">
+            </div>
+            <div class="form-group">
+              <label class="form-label">סוג</label>
+              <select class="form-control" id="f-kind">
+                <option value="">הכל</option>
+                <option value="operational" ${filterKind === 'operational' ? 'selected' : ''}>מבצעי</option>
+                <option value="administrative" ${filterKind === 'administrative' ? 'selected' : ''}>מנהלתי</option>
+              </select>
             </div>
             <div class="form-group">
               <label class="form-label">קטגוריה</label>
@@ -84,6 +98,7 @@ Pages['hamal-management'] = function(query) {
                 <thead>
                   <tr>
                     <th style="width:70px">שעה</th>
+                    <th style="width:80px">סוג</th>
                     <th style="width:130px">סוג פעולה</th>
                     <th style="width:90px">קטגוריה</th>
                     <th>תיאור</th>
@@ -94,11 +109,12 @@ Pages['hamal-management'] = function(query) {
                   </tr>
                 </thead>
                 <tbody>
-                  ${entries.length === 0 ? `<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--color-text-muted)">לא נמצאו רשומות</td></tr>` :
+                  ${entries.length === 0 ? `<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--color-text-muted)">לא נמצאו רשומות</td></tr>` :
                     entries.map(e => {
                       const isCritical = (e.priority === 'critical' || e.priority === 'high') && e.status !== 'closed';
                       return `<tr class="${isCritical ? 'row-critical' : ''}">
                         <td><strong style="font-variant-numeric:tabular-nums">${Utils.escHtml(e.time)}</strong></td>
+                        <td>${kindBadge(e.entryKind)}</td>
                         <td>${Utils.escHtml(e.actionType)}</td>
                         <td><span class="badge badge-info">${Utils.escHtml(e.category)}</span></td>
                         <td style="max-width:220px;white-space:normal;word-break:break-word">${Utils.truncate(e.description, 80)}</td>
@@ -142,11 +158,12 @@ Pages['hamal-management'] = function(query) {
     // Wire filters
     Utils.el('apply-filters').onclick = () => {
       filterDate = Utils.el('f-date').value;
+      filterKind = Utils.el('f-kind').value;
       filterCategory = Utils.el('f-category').value;
       filterSearch = Utils.el('f-search').value;
       renderPage();
     };
-    Utils.el('reset-filters').onclick = () => { filterDate = Utils.today(); filterCategory = ''; filterSearch = ''; renderPage(); };
+    Utils.el('reset-filters').onclick = () => { filterDate = Utils.today(); filterKind = ''; filterCategory = ''; filterSearch = ''; renderPage(); };
 
     // Category pill filter
     window._hamalFilterCat = (cat) => { filterCategory = cat; renderPage(); };
@@ -173,7 +190,8 @@ Pages['hamal-management'] = function(query) {
         title: `פעולה — ${entry.date} ${entry.time}`,
         body: `
           <div class="info-list">
-            <div class="info-list-row"><div class="info-list-label">סוג</div><div>${Utils.escHtml(entry.actionType)}</div></div>
+            <div class="info-list-row"><div class="info-list-label">סוג</div><div>${kindBadge(entry.entryKind)}</div></div>
+            <div class="info-list-row"><div class="info-list-label">סוג פעולה</div><div>${Utils.escHtml(entry.actionType)}</div></div>
             <div class="info-list-row"><div class="info-list-label">קטגוריה</div><div>${Utils.escHtml(entry.category)}</div></div>
             <div class="info-list-row"><div class="info-list-label">עדיפות</div><div>${StatusBadge.renderPriority(entry.priority)}</div></div>
             <div class="info-list-row"><div class="info-list-label">מדווח</div><div>${Utils.escHtml(entry.reportedBy)}</div></div>
@@ -208,6 +226,14 @@ Pages['hamal-management'] = function(query) {
             <input type="time" class="form-control" id="hamal-time" value="${Utils.currentTimeString().slice(0,5)}">
           </div>
           <div class="form-group">
+            <label class="form-label">סוג <span class="required">*</span></label>
+            <select class="form-control" id="hamal-kind">
+              <option value="">בחר סוג</option>
+              <option value="operational">מבצעי</option>
+              <option value="administrative">מנהלתי</option>
+            </select>
+          </div>
+          <div class="form-group">
             <label class="form-label">סוג פעולה <span class="required">*</span></label>
             <select class="form-control" id="hamal-action">
               ${HAMAL_ACTION_TYPES.map(a => `<option value="${a.id}">${Utils.escHtml(a.label)}</option>`).join('')}
@@ -240,15 +266,16 @@ Pages['hamal-management'] = function(query) {
     window._saveHamalEntry = () => {
       const date = Utils.el('hamal-date').value;
       const time = Utils.el('hamal-time').value;
+      const entryKind = Utils.el('hamal-kind').value;
       const actionType = Utils.el('hamal-action').value;
       const category = Utils.el('hamal-category').value;
       const priority = Utils.el('hamal-priority').value;
       const description = Utils.el('hamal-desc').value;
-      if (!date || !time || !description) { Toast.error('יש למלא שדות חובה'); return; }
+      if (!date || !time || !description.trim() || !entryKind) { Toast.error('יש למלא שדות חובה'); return; }
 
       const entry = {
         id: 'h_' + Utils.generateId(),
-        date, time, actionType, category, priority, description,
+        date, time, entryKind, actionType, category, priority, description,
         reportedBy: user ? user.firstName + ' ' + user.lastName : '',
         status: 'open',
         createdAt: new Date().toISOString(),

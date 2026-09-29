@@ -584,7 +584,7 @@ Pages['officer-report-form'] = function(query) {
   }
 
   function renderTabStatuses() {
-    const auditEntries = Storage.getCollection(Storage.KEYS.AUDIT).filter(a => a.entityId === reportId);
+    const auditEntries = Storage.getCollection(Storage.KEYS.AUDIT_ENTRIES).filter(a => a.entityId === reportId);
     return `
       <div class="card">
         <div class="card-header"><div class="card-title">היסטוריית סטטוסים</div></div>
