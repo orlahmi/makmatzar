@@ -107,7 +107,7 @@ Pages['new-deserter-file'] = function(query) {
 
   function showDup(existing) {
     const box = $('nd-dup');
-    box.innerHTML = `לאדם זה כבר קיים תיק עריק פעיל (${Utils.escHtml(existing.fileNumber || existing.id)}). לא ניתן לפתוח תיק נוסף. <button type="button" class="btn btn-secondary btn-sm" id="nd-open-existing">פתח את התיק הקיים</button>`;
+    box.innerHTML = `לאדם זה כבר קיים תיק עריק פעיל (${Utils.escHtml(existing.fileNumber || (function(dg) { return dg ? 'ED-' + dg.slice(-6).padStart(6, '0') : existing.id; })(String(existing.id).replace(/[^0-9]/g, '')))}). לא ניתן לפתוח תיק נוסף. <button type="button" class="btn btn-secondary btn-sm" id="nd-open-existing">פתח את התיק הקיים</button>`;
     box.style.display = 'block';
     $('nd-open-existing').onclick = () => Router.navigate('/deserter-file', { id: existing.id });
   }
