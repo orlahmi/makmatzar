@@ -563,7 +563,9 @@ window.Pages['gachlat'] = function(query) {
 
   /* Section 2 — בדיקת התאמה לגחל"ת */
   function buildSecCandidacy(c) {
-    var reasons = (c.candidateReasons || []).map(function(r) { return '<li style="margin-bottom:4px">' + Utils.escHtml(r) + '</li>'; }).join('');
+    var live = SS.criteriaStatus(c);
+    var liveReasons = live.hard.concat(live.flexible).filter(function(k) { return k.met; }).map(function(k) { return k.label; });
+    var reasons = (liveReasons.length ? liveReasons : (c.candidateReasons || [])).map(function(r) { return '<li style="margin-bottom:4px">' + Utils.escHtml(r) + '</li>'; }).join('');
     return (
       '<div>' +
         '<div style="font-size:13px;font-weight:600;color:#1a3a5c;margin-bottom:10px">בדיקת התאמה לגחל"ת</div>' +
