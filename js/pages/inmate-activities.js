@@ -455,7 +455,7 @@ Pages['inmate-activities'] = function(query) {
                 const p = pMap[pf.personId];
                 return `<label style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:13px">
                   <input type="checkbox" class="rec-participant-cb" value="${pf.id}">
-                  ${p ? Utils.escHtml(p.firstName + ' ' + p.lastName + ' — ' + (pf.fileNumber || pf.id)) : (pf.fileNumber || pf.id)}
+                  ${p ? Utils.escHtml(p.firstName + ' ' + p.lastName + ' — ' + (p.militaryNumber || pf.fileNumber || '')) : (pf.fileNumber || '—')}
                 </label>`;
               }).join('') || '<div style="color:var(--color-text-muted);font-size:13px">אין כלואים פעילים</div>'}
             </div>
