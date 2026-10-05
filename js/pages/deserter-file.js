@@ -233,7 +233,7 @@ Pages['deserter-file'] = function(query) {
           ${survFiles.length === 0 ? '<div class="empty-state-desc">אין פעילויות בילוש מקושרות לתיק זה.</div>' : `
             <table class="data-table">
               <thead><tr><th>תאריך</th><th>מיקום</th><th>תיאור</th><th>סטטוס</th></tr></thead>
-              <tbody>${survFiles.map(s => `<tr><td>${fd(s.date)}</td><td>${esc(s.location)}</td><td>${Utils.truncate(s.description, 60)}</td><td>${StatusBadge.render(s.status)}</td></tr>`).join('')}</tbody>
+              <tbody>${survFiles.map(s => `<tr><td>${fd(s.date)}</td><td>${esc(s.location)}</td><td>${esc(Utils.truncate(s.objective || s.description || "", 60))}</td><td>${StatusBadge.render(s.status)}</td></tr>`).join('')}</tbody>
             </table>`}
           ${canEdit ? `<button class="btn btn-secondary btn-sm" style="margin-top:12px" onclick="Router.navigate('/surveillance-activity-build', {deserterFileId:'${fileId}'})">פתח פעילות בילוש</button>` : ''}
         </div>
