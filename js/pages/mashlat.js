@@ -1132,86 +1132,21 @@ Pages['mashlat'] = function(query) {
   }
 
   /* ── Prisoner intake ─────────────────────────────────────────────── */
+  // "פתח תיק כלוא": never creates a second ACTIVE file; otherwise continues on the full פתיחת תיק כלוא screen
   function openIntakeModal(coordinationId) {
     var c = Storage.getById(Storage.KEYS.MASHLAT_COORDINATIONS, coordinationId);
     if (!c) return;
-    var p               = pMap[c.personId];
-    var expectedRelease = c.incarcerationDays ? Utils.addDays(Utils.today(), c.incarcerationDays) : '';
-
-    Modal.open({
-      title: 'פתיחת תיק כלוא — מ' + c.coordinationNumber,
-      size:  'lg',
-      body:
-        '<div style="padding:8px 12px;background:var(--color-primary-subtle);border-radius:var(--radius-md);margin-bottom:var(--space-4);font-size:13px">' +
-          Utils.icon('prison', 14) + ' מקור: משל"ט — תיאום ' + c.coordinationNumber + ' • ' + Utils.formatDate(c.coordinationDate) +
-        '</div>' +
-        '<div class="form-row form-row-2">' +
-          '<div class="form-group"><label class="form-label">אדם</label>' +
-            '<input class="form-control" value="' + Utils.escHtml(p ? p.firstName + ' ' + p.lastName + ' — ' + p.militaryNumber : (c.manualFirstName + ' ' + c.manualLastName)) + '" readonly>' +
-            '<input type="hidden" id="intake-person-id" value="' + Utils.escHtml(c.personId || '') + '">' +
-          '</div>' +
-          '<div class="form-group"><label class="form-label">סוג כלוא</label><select id="intake-type" class="form-control">' +
-            (PRISONER_TYPES || []).map(function(t) { return '<option value="' + Utils.escHtml(t) + '">' + Utils.escHtml(t) + '</option>'; }).join('') +
-          '</select></div>' +
-          '<div class="form-group"><label class="form-label">תאריך קבלה</label><input type="date" id="intake-admission" class="form-control" value="' + Utils.today() + '"></div>' +
-          '<div class="form-group"><label class="form-label">שחרור צפוי</label><input type="date" id="intake-release" class="form-control" value="' + expectedRelease + '"></div>' +
-          '<div class="form-group"><label class="form-label">כלא / פלוגה</label><select id="intake-company" class="form-control">' +
-            (DETENTION_COMPANIES || []).map(function(dc) { return '<option value="' + Utils.escHtml(dc) + '">' + Utils.escHtml(dc) + '</option>'; }).join('') +
-          '</select></div>' +
-          '<div class="form-group"><label class="form-label">רמת סיכון</label><select id="intake-risk" class="form-control">' +
-            (RISK_LEVELS || []).map(function(r) { return '<option value="' + r.id + '">' + Utils.escHtml(r.label) + '</option>'; }).join('') +
-          '</select></div>' +
-        '</div>' +
-        '<div class="form-group"><label class="form-label">עילת מעצר</label><input id="intake-reason" class="form-control" value="' + Utils.escHtml(c.offense || '') + '"></div>' +
-        '<div class="form-group"><label class="form-label">הערות</label><textarea id="intake-notes" class="form-control" rows="2">' + Utils.escHtml(c.generalNotes || '') + '</textarea></div>',
-      footer:
-        '<button class="btn btn-secondary" onclick="Modal.close()">ביטול</button>' +
-        '<button class="btn btn-primary" onclick="window._msltCreateFile(\'' + coordinationId + '\')">פתח תיק כלוא</button>',
-    });
-
-    window._msltCreateFile = function(coordId) {
-      var coord = Storage.getById(Storage.KEYS.MASHLAT_COORDINATIONS, coordId);
-      if (!coord) return;
-      var pidCheck = (Utils.el('intake-person-id') || {}).value || null;
-      var existingFile = pidCheck ? Storage.getCollection(Storage.KEYS.PRISONER_FILES).filter(function(f) { return f.personId === pidCheck && f.status === 'active'; })[0] : null;
-      if (existingFile) {
-        var linked = Object.assign({}, coord, { status: 'completed', prisonerFileId: existingFile.id, completedAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
-        Storage.upsert(Storage.KEYS.MASHLAT_COORDINATIONS, linked);
-        Audit.log({ module: 'mashlat', action: 'update_status', entityType: 'coordination', entityId: coordId,
-          description: 'תיאום ' + coord.coordinationNumber + ' קושר לתיק כלוא פעיל קיים ' + (existingFile.fileNumber || existingFile.id) });
-        Modal.close();
-        Toast.info('לחייל כבר קיים תיק כלוא פעיל (' + (existingFile.fileNumber || existingFile.id) + ') — התיאום קושר אליו ולא נפתח תיק נוסף');
-        Router.navigate('/prisoner-file', { id: existingFile.id });
-        return;
-      }
-      var file = {
-        id:               'pf_' + Utils.generateId(),
-        fileNumber:       'PF-' + String(Math.floor(Math.random() * 90000) + 10000),
-        personId:         (Utils.el('intake-person-id') || {}).value || null,
-        prisonerType:     (Utils.el('intake-type')      || {}).value || '',
-        admissionDate:    (Utils.el('intake-admission') || {}).value || '',
-        expectedRelease:  (Utils.el('intake-release')   || {}).value || null,
-        detentionCompany: (Utils.el('intake-company')   || {}).value || '',
-        riskLevel:        (Utils.el('intake-risk')      || {}).value || '',
-        detentionReason:  (Utils.el('intake-reason')    || {}).value || '',
-        notes:            (Utils.el('intake-notes')     || {}).value || '',
-        status:           'active',
-        coordinationId:   coordId,
-        createdAt:        new Date().toISOString(),
-        updatedAt:        new Date().toISOString(),
-      };
-      Storage.upsert(Storage.KEYS.PRISONER_FILES, file);
-      if (window.GachlatScreeningService) GachlatScreeningService.refresh();
-      Audit.log({ module: 'incarceration', action: 'create', entityType: 'prisonerFile', entityId: file.id,
-        description: 'פתיחת תיק כלוא ' + file.fileNumber + ' ממשל"ט ' + coord.coordinationNumber });
-      var updatedCoord = Object.assign({}, coord, { status: 'completed', prisonerFileId: file.id, completedAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
-      Storage.upsert(Storage.KEYS.MASHLAT_COORDINATIONS, updatedCoord);
-      Audit.log({ module: 'mashlat', action: 'update_status', entityType: 'coordination', entityId: coordId,
-        description: 'תיאום ' + coord.coordinationNumber + ' הושלם — תיק כלוא ' + file.fileNumber + ' נפתח', previousValue: 'arrived', newValue: 'completed' });
-      Modal.close();
-      Toast.success('תיק כלוא ' + file.fileNumber + ' נפתח — תיאום הושלם');
-      Router.navigate('/prisoner-file', { id: file.id });
-    };
+    var existingFile = c.personId ? Storage.getCollection(Storage.KEYS.PRISONER_FILES).filter(function(f) { return f.personId === c.personId && f.status === 'active'; })[0] : null;
+    if (existingFile) {
+      var linked = Object.assign({}, c, { status: 'completed', prisonerFileId: existingFile.id, completedAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+      Storage.upsert(Storage.KEYS.MASHLAT_COORDINATIONS, linked);
+      Audit.log({ module: 'mashlat', action: 'update_status', entityType: 'coordination', entityId: coordinationId,
+        description: 'תיאום ' + c.coordinationNumber + ' קושר לתיק כלוא פעיל קיים ' + (existingFile.fileNumber || existingFile.id) });
+      Toast.info('לחייל כבר קיים תיק כלוא פעיל (' + (existingFile.fileNumber || existingFile.id) + ') — התיאום קושר אליו ולא נפתח תיק נוסף');
+      Router.navigate('/prisoner-file', { id: existingFile.id });
+      return;
+    }
+    Router.navigate('/new-prisoner-file', { coordination: coordinationId });
   }
 
   /* ── Reschedule ──────────────────────────────────────────────────── */

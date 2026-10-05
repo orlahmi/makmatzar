@@ -78,7 +78,9 @@ Pages['new-prisoner-file'] = function(query) {
       ${Utils.classificationFooter()}
     </div>`;
 
-  $('np-cancel').onclick = () => Router.navigate('/prisoner-file');
+  const coordId = query && query.coordination;
+  const coord = coordId ? Storage.getById(Storage.KEYS.MASHLAT_COORDINATIONS, coordId) : null;
+  $('np-cancel').onclick = () => Router.navigate(coord ? '/mashlat' : '/prisoner-file');
 
   const activeFor = pid => Storage.getCollection(Storage.KEYS.PRISONER_FILES).find(f => f.personId === pid && f.status === 'active');
   function showDup(ex) {
@@ -111,10 +113,20 @@ Pages['new-prisoner-file'] = function(query) {
     const ex = activeFor(person.id); if (ex) showDup(ex); else Toast.success('פרטי האדם נשלפו');
   };
 
+  // opened from a Mashlat coordination: prefill from it (identity still comes from the person dataset)
+  if (coord) {
+    const cp = coord.personId ? Storage.getById(Storage.KEYS.PEOPLE, coord.personId) : null;
+    if (cp) { $('np-mil').value = cp.militaryNumber; $('np-lookup').click(); }
+    if (coord.incarcerationDays) { $('np-sentence').value = coord.incarcerationDays; calcNoReduction(); }
+    if (coord.offense) $('np-reason').value = coord.offense;
+    Toast.info('הנתונים נטענו מתיאום ' + (coord.coordinationNumber || '') + ' — יש לוודא חישוב עונש ולשמור');
+  }
+
   $('np-save').onclick = () => {
     const errs = []; const mark = (id, msg) => { errs.push(msg); $(id).style.borderColor = 'var(--color-danger)'; };
     ['np-mil', 'np-nid', 'np-first', 'np-last', 'np-rank', 'np-unit', 'np-admission', 'np-sentence'].forEach(id => { $(id).style.borderColor = ''; });
     if (!person) mark('np-mil', 'יש לשלוף אדם לפי מספר אישי');
+    else if ($('np-mil').value.trim() !== person.militaryNumber) mark('np-mil', 'המספר האישי שונה מהאדם שנשלף — יש ללחוץ שליפה');
     else {
       if (!$('np-nid').value.trim()) mark('np-nid', 'חסרה ת.ז. — יש להשלים');
       else if (!Utils.isValidNationalId($('np-nid').value.trim())) mark('np-nid', 'ת.ז. לא תקינה (9 ספרות)');
@@ -154,8 +166,12 @@ Pages['new-prisoner-file'] = function(query) {
       fatherName: v('np-father'), unitPhone: v('np-unitphone'), birthCountry: v('np-country'),
       classification: { placementRec: v('np-placement'), profile: v('np-profile') }, medicalNotes: v('np-medical'), notes: v('np-notes'),
       status: 'active', createdAt: now, updatedAt: now,
-    }, flags);
+    }, coord ? { coordinationId: coord.id } : {}, flags);
     Storage.upsert(Storage.KEYS.PRISONER_FILES, file);
+    if (coord) {
+      Storage.upsert(Storage.KEYS.MASHLAT_COORDINATIONS, Object.assign({}, coord, { status: 'completed', prisonerFileId: file.id, completedAt: now, updatedAt: now }));
+      Audit.log({ module: 'mashlat', action: 'update_status', entityType: 'coordination', entityId: coord.id, description: 'תיאום ' + coord.coordinationNumber + ' הושלם — תיק כלוא ' + file.fileNumber + ' נפתח' });
+    }
     if (window.GachlatScreeningService) GachlatScreeningService.refresh();
     Audit.log({ module: 'incarceration', action: 'create', entityType: 'prisonerFile', entityId: file.id, description: `פתיחת תיק כלוא ${file.fileNumber}` });
     Toast.success('תיק כלוא נפתח');
