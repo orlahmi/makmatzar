@@ -87,7 +87,7 @@ Pages['service-work-prisoner-file'] = function(query) {
                 ${sRow('שם ושם משפחה', person ? esc(person.firstName + ' ' + person.lastName) : '—')}
                 ${sRow('יחידת הצבה קודמת', esc(file.previousUnit || (person && person.unit) || '—'))}
                 ${sRow('סוג רישום', esc(file.registrationType || 'גחל״ת'))}
-                ${sRow('יחידה מעסיקה', esc(file.employingUnit || '—'))}
+                ${sRow('יחידה מעסיקה', esc(((window.DEMO_UNITS || []).find(function(u) { return u.id === file.employingUnit; }) || {}).name || file.employingUnit || '—'))}
                 ${sRow('סטטוס תיק', StatusBadge.render(file.status))}
               </div>
               <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--color-border)">
