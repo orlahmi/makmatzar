@@ -310,6 +310,7 @@ Pages['mashlat'] = function(query) {
   var DESTINATIONS = ['בסיס 100', 'בסיס 416', 'בסיס 302', 'בסיס 708', 'כלא 6', 'כלא 4', 'כלא 1', 'מעצר חוץ חילי'];
 
   var TRANSFER_REASON_LABELS = {
+    none:               'אין / לא רלוונטי',
     security_situation: 'מצב ביטחוני',
     living_conditions:  'תנאי מחיה',
     other:              'אחר',
