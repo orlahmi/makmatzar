@@ -54,6 +54,31 @@ window.Migrations = (function() {
         });
       },
     },
+    {
+      // six-canteen model: legacy ids -> canonical ids; seeded demo records are spread over the six canteens
+      id: '2026-10-six-canteens',
+      run() {
+        const K = Storage.KEYS; const C = CANTEENS;
+        const legacy = LEGACY_CANTEEN_MAP;
+        const ps = Storage.getCollection(K.CANTEEN_PURCHASES);
+        ps.forEach((p, i) => {
+          if (/^cp\d{3}$/.test(p.id)) { const c = C[i % C.length]; p.canteenId = c.id; p.canteenName = c.name; p.baseId = c.baseId; }
+          else if (legacy[p.canteenId]) { const c = C.find(x => x.id === legacy[p.canteenId]); p.canteenId = c.id; p.canteenName = c.name; }
+        });
+        Storage.setCollection(K.CANTEEN_PURCHASES, ps);
+        const pairs = [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 0], [1, 4], [2, 5]];
+        const ms = Storage.getCollection(K.STOCK_MOVEMENTS);
+        let n = 0;
+        ms.forEach(m => {
+          if (/^sm\d{3}$/.test(m.id)) { const [a, b] = pairs[n++ % pairs.length]; m.sourceCanteenId = C[a].id; m.sourceCanteenName = C[a].name; m.destCanteenId = C[b].id; m.destCanteenName = C[b].name; }
+          else {
+            if (legacy[m.sourceCanteenId]) { const c = C.find(x => x.id === legacy[m.sourceCanteenId]); m.sourceCanteenId = c.id; m.sourceCanteenName = c.name; }
+            if (legacy[m.destCanteenId]) { const c = C.find(x => x.id === legacy[m.destCanteenId]); m.destCanteenId = c.id; m.destCanteenName = c.name; }
+          }
+        });
+        Storage.setCollection(K.STOCK_MOVEMENTS, ms);
+      },
+    },
   ];
 
   function runAll() {

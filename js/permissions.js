@@ -80,8 +80,9 @@ window.Permissions = (function() {
         label: 'בילוש',
         icon: 'detective',
         items: [
-          { label: 'אחזור עריק/משתמט', path: '/deserter-retrieval', icon: 'deserter' },
           { label: 'בניית פעילות בילוש', path: '/surveillance-activity-build', icon: 'surveillance' },
+          { label: 'פתיחת תיק עריק', path: '/new-deserter-file', icon: 'plus' },
+          { label: 'אחזור עריק/משתמט', path: '/deserter-retrieval', icon: 'deserter' },
         ]
       },
       {
@@ -93,6 +94,7 @@ window.Permissions = (function() {
           { label: 'קניות בקנטינה', path: '/canteen-purchases', icon: 'canteen', sublabel: 'קנטינה' },
           { label: 'תנועות מלאי בין קנטינות', path: '/canteen-stock-movements', icon: 'stock' },
           { label: 'אחזור תיק כלוא', path: '/prisoner-file', icon: 'report' },
+          { label: 'פתיחת תיק כלוא', path: '/new-prisoner-file', icon: 'plus' },
           { label: 'גחל"ת עובדי שירות', path: '/service-work-prisoner-file', icon: 'report' },
           { label: 'גחל"ת אבחון', path: '/gachlat', icon: 'report' },
           { label: 'פעילויות', path: '/inmate-activities', icon: 'activity' },

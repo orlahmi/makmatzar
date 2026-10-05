@@ -29,6 +29,7 @@ window.Storage = (function() {
     CANTEEN_PURCHASES: PREFIX + 'canteenPurchases',
     CANTEEN_PURCHASE_ITEMS: PREFIX + 'canteenPurchaseItems',
     CANTEEN_PRODUCTS: PREFIX + 'canteenProducts',
+    PASS_PERMITS: PREFIX + 'passPermits',
     STOCK_MOVEMENTS: PREFIX + 'stockMovements',
     STOCK_MOVEMENT_ITEMS: PREFIX + 'stockMovementItems',
     NOTIFICATIONS: PREFIX + 'notifications',

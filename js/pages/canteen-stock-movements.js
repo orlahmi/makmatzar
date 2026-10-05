@@ -10,7 +10,7 @@ Pages['canteen-stock-movements'] = function(query) {
   const canApprove = Permissions.can('approveStock');
   const canCreate = Permissions.can('createPurchase');
   const canteens = CanteenData.canteens();
-  const cName = id => (canteens.find(c => c.id === id) || {}).name || '—';
+  const cName = id => CanteenData.canteenName(id);
   const PAGE = 6;
 
   let tab = 'all';           // 'all' or a canteen id
@@ -23,7 +23,7 @@ Pages['canteen-stock-movements'] = function(query) {
 
   function getData() {
     let list = Storage.getCollection(Storage.KEYS.STOCK_MOVEMENTS);
-    if (tab !== 'all') list = list.filter(m => m.sourceCanteenId === tab || m.destCanteenId === tab);
+    if (tab !== 'all') list = list.filter(m => CanteenData.canon(m.sourceCanteenId) === tab || CanteenData.canon(m.destCanteenId) === tab);
     if (filterApproved === 'yes') list = list.filter(isApproved);
     if (filterApproved === 'no') list = list.filter(m => !isApproved(m));
     if (filterDate) list = list.filter(m => (m.movementDate || m.date) === filterDate);
@@ -83,8 +83,8 @@ Pages['canteen-stock-movements'] = function(query) {
               ${rows.length === 0 ? `<tr><td colspan="7" style="padding:32px;text-align:center;color:var(--color-text-muted)">אין תנועות מלאי${tab !== 'all' ? ' עבור קנטינה זו' : ''}</td></tr>` :
                 rows.map(m => `<tr class="${selectedId === m.id ? 'row-selected' : ''}" style="cursor:pointer" onclick="window._smSelect('${m.id}')">
                   <td class="td-number">${Utils.escHtml(m.movementNumber)}</td>
-                  <td>${Utils.escHtml(m.destCanteenName || cName(m.destCanteenId))}</td>
-                  <td>${Utils.escHtml(m.sourceCanteenName || cName(m.sourceCanteenId))}</td>
+                  <td>${Utils.escHtml(cName(m.destCanteenId))}</td>
+                  <td>${Utils.escHtml(cName(m.sourceCanteenId))}</td>
                   <td>${Utils.formatDate(m.movementDate)}</td>
                   <td>${Utils.escHtml(m.approverName || '—')}</td>
                   <td>${isApproved(m) ? '<span class="badge badge-success">כן</span>' : '<span class="badge badge-draft">לא</span>'}</td>
@@ -103,7 +103,7 @@ Pages['canteen-stock-movements'] = function(query) {
             </span>
           </div>
           ${!selected ? `<div style="padding:24px;text-align:center;color:var(--color-text-muted)">בחר תנועה מהטבלה הראשית להצגת הפירוט</div>` : `
-          <div style="padding:8px 16px;font-size:12px;color:var(--color-text-muted)">מ-${Utils.escHtml(selected.sourceCanteenName || cName(selected.sourceCanteenId))} אל ${Utils.escHtml(selected.destCanteenName || cName(selected.destCanteenId))}${selected.rejectionReason ? ' • סיבת דחייה: ' + Utils.escHtml(selected.rejectionReason) : ''}</div>
+          <div style="padding:8px 16px;font-size:12px;color:var(--color-text-muted)">מ-${Utils.escHtml(cName(selected.sourceCanteenId))} אל ${Utils.escHtml(cName(selected.destCanteenId))}${selected.rejectionReason ? ' • סיבת דחייה: ' + Utils.escHtml(selected.rejectionReason) : ''}</div>
           <table class="data-table">
             <thead><tr><th>קוד מוצר</th><th>תיאור מוצר</th><th>כמות מבוקשת</th><th>כמות מאושרת</th><th>הערות</th></tr></thead>
             <tbody>
@@ -140,7 +140,7 @@ Pages['canteen-stock-movements'] = function(query) {
     Utils.el('f-apply').onclick = () => { filterApproved = Utils.el('f-approved').value; filterDate = Utils.el('f-date').value; page = 0; renderPage(); };
     Utils.el('f-reset').onclick = () => { filterApproved = ''; filterDate = ''; page = 0; renderPage(); };
     Utils.el('btn-export').onclick = () => {
-      const csv = getData().map(m => [m.movementNumber, m.sourceCanteenName || cName(m.sourceCanteenId), m.destCanteenName || cName(m.destCanteenId), m.movementDate, isApproved(m) ? 'כן' : 'לא']);
+      const csv = getData().map(m => [m.movementNumber, cName(m.sourceCanteenId), cName(m.destCanteenId), m.movementDate, isApproved(m) ? 'כן' : 'לא']);
       Utils.exportCsv('stock_movements.csv', ['מספר', 'מופקת', 'מקבלת', 'תאריך', 'אושר'], csv);
     };
     if (Utils.el('btn-new')) Utils.el('btn-new').onclick = showNewMovement;
@@ -173,13 +173,13 @@ Pages['canteen-stock-movements'] = function(query) {
     });
     Utils.el('ai-product').onchange = () => {
       const code = Utils.el('ai-product').value;
-      Utils.el('ai-stock').textContent = code ? 'מלאי בקנטינה המפיקה: ' + CanteenData.stockOf(code, mov.sourceCanteenId) : '';
+      Utils.el('ai-stock').textContent = code ? 'מלאי בקנטינה המפיקה: ' + CanteenData.stockOf(code, CanteenData.canon(mov.sourceCanteenId)) : '';
     };
     Utils.el('ai-save').onclick = () => {
       const code = Utils.el('ai-product').value; const qty = parseInt(Utils.el('ai-qty').value, 10);
       if (!code) { Toast.error('יש לבחור מוצר'); return; }
       if (!qty || qty < 1) { Toast.error('כמות לא תקינה'); return; }
-      if (qty > CanteenData.stockOf(code, mov.sourceCanteenId)) { Toast.error('הכמות גדולה מהמלאי בקנטינה המפיקה'); return; }
+      if (qty > CanteenData.stockOf(code, CanteenData.canon(mov.sourceCanteenId))) { Toast.error('הכמות גדולה מהמלאי בקנטינה המפיקה'); return; }
       const dup = CanteenData.movementItems(mov).find(i => i.productCode === code);
       if (dup) { Toast.error('המוצר כבר קיים בתנועה'); return; }
       const p = CanteenData.findProduct(code);
@@ -218,10 +218,15 @@ Pages['canteen-stock-movements'] = function(query) {
     };
   }
 
-  async function approve(mov, items) {
+  async function approve(mov0, items) {
+    const mov = Storage.getById(Storage.KEYS.STOCK_MOVEMENTS, mov0.id);
+    if (!mov || isApproved(mov)) { Toast.error('התנועה כבר אושרה — לא ניתן לאשר פעמיים'); renderPage(); return; }
+    if (mov.status === 'rejected') { Toast.error('תנועה שנדחתה לא ניתנת לאישור'); return; }
     if (!items.length) { Toast.error('לא ניתן לאשר תנועה ללא פריטים'); return; }
-    const short = items.find(i => (Number(i.requestedQty) || 0) > CanteenData.stockOf(i.productCode, mov.sourceCanteenId));
+    const short = items.find(i => (Number(i.requestedQty) || 0) > CanteenData.stockOf(i.productCode, CanteenData.canon(mov.sourceCanteenId)));
     if (short) { Toast.error('אין מלאי מספיק ב"' + short.productName + '" בקנטינה המפיקה'); return; }
+    const again = Storage.getById(Storage.KEYS.STOCK_MOVEMENTS, mov.id);
+    if (again && isApproved(again)) { Toast.error('התנועה כבר אושרה'); renderPage(); return; }
     const ok = await Modal.confirm({ title: 'אישור תנועת מלאי', message: 'לאשר את התנועה ' + mov.movementNumber + '? המלאי יועבר בין הקנטינות.', type: 'success' });
     if (!ok) return;
     const u = Auth.getCurrentUser();

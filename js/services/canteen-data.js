@@ -5,8 +5,11 @@ window.CanteenData = (function() {
   const BASE_STOCK = 200; // opening stock per canteen for demo products
 
   function canteens() {
-    return DEMO_UNITS.filter(u => u.type === 'canteen');
+    return CANTEENS;
   }
+  // resolves ids of the earlier two-canteen demo to the canonical ones
+  function canon(id) { return (window.LEGACY_CANTEEN_MAP && LEGACY_CANTEEN_MAP[id]) || id; }
+  function canteenName(id) { const c = CANTEENS.find(x => x.id === canon(id)); return c ? c.name : '—'; }
 
   // Products live in their own collection; seeded once from the demo catalogue.
   function products() {
@@ -48,11 +51,11 @@ window.CanteenData = (function() {
       movementItems(m).forEach(it => {
         if (it.productCode !== productCode) return;
         const q = Number(it.approvedQty != null ? it.approvedQty : it.requestedQty) || 0;
-        if (m.destCanteenId === canteenId) stock += q;
-        if (m.sourceCanteenId === canteenId) stock -= q;
+        if (canon(m.destCanteenId) === canteenId) stock += q;
+        if (canon(m.sourceCanteenId) === canteenId) stock -= q;
       });
     });
-    Storage.getCollection(Storage.KEYS.CANTEEN_PURCHASES).filter(p => p.canteenId === canteenId && p.status !== 'cancelled').forEach(p => {
+    Storage.getCollection(Storage.KEYS.CANTEEN_PURCHASES).filter(p => canon(p.canteenId) === canteenId && p.status !== 'cancelled').forEach(p => {
       purchaseItems(p).forEach(it => {
         if (it.productCode === productCode) stock -= (Number(it.quantity) || 0) - (Number(it.returnedQuantity) || 0);
       });
@@ -65,5 +68,5 @@ window.CanteenData = (function() {
     return (v == null || isNaN(Number(v))) ? '—' : Utils.formatCurrency(Number(v));
   }
 
-  return { canteens, products, findProduct, purchaseItems, movementItems, isApproved, stockOf, money };
+  return { canteens, canon, canteenName, products, findProduct, purchaseItems, movementItems, isApproved, stockOf, money };
 })();

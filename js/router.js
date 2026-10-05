@@ -128,6 +128,8 @@ window.Router = (function() {
     '/tasks': 'משימות',
     '/add-task': 'הוספת משימה',
     '/deserter-retrieval': 'אחזור עריק/משתמט',
+    '/new-deserter-file': 'פתיחת תיק עריק',
+    '/new-prisoner-file': 'פתיחת תיק כלוא',
     '/deserter-file': 'תיק עריק',
     '/surveillance-activity-build': 'בניית פעילות בילוש',
     '/prisoner-file': 'אחזור תיק כלוא',

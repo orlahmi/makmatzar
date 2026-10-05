@@ -72,7 +72,6 @@ Pages['prisoner-file'] = function(query) {
 
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
           <button class="btn btn-secondary btn-sm" id="btn-export">${Utils.icon('download', 14)} ייצוא</button>
-          ${Permissions.can('createPrisoner') ? `<button class="btn btn-primary" id="btn-new">${Utils.icon('plus', 14)} פתיחת תיק כלוא</button>` : ''}
         </div>
 
         <div class="retrieval-panel">
@@ -147,7 +146,6 @@ Pages['prisoner-file'] = function(query) {
       const rows = getData().map(x => { const p = pMap[x.personId] || {}; return [x.fileNumber, (p.firstName || '') + ' ' + (p.lastName || ''), p.militaryNumber || '', x.prisonerType, x.admissionDate, x.status]; });
       Utils.exportCsv('prisoners.csv', ['מספר תיק', 'שם', 'מ"א', 'סוג', 'קבלה', 'סטטוס'], rows);
     };
-    if (Utils.el('btn-new')) Utils.el('btn-new').onclick = () => showNewPrisonerModal(people);
     }
     draw();
   }
@@ -523,6 +521,7 @@ Pages['prisoner-file'] = function(query) {
         <div class="card-header"><div class="card-title">מצב בריאותי</div></div>
         <div class="card-body">
           <div class="info-list">
+            ${file.medicalNotes ? infoRow('הערות רפואיות (מפתיחת התיק)', esc(file.medicalNotes)) : ''}
             ${infoRow('מצב כללי', esc(h.generalStatus))}
             ${infoRow('מגבלות רפואיות', esc(h.medicalRestrictions))}
             ${infoRow('תרופות', esc(h.medications))}
@@ -1018,85 +1017,4 @@ Pages['prisoner-file'] = function(query) {
     };
   };
 
-  // פתיחת תיק כלוא — intake + personal fields taken from the legacy prisoner file header
-  function showNewPrisonerModal(people) {
-    const now = new Date();
-    const hhmm = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
-    const inp = (id, label, extra, req) => `<div class="form-group"><label class="form-label">${label}${req ? ' <span class="required">*</span>' : ''}</label><input id="${id}" class="form-control" ${extra || ''}></div>`;
-    const flag = (id, label) => `<label style="display:flex;gap:6px;align-items:center;margin:4px 12px 4px 0"><input type="checkbox" id="${id}"> ${label}</label>`;
-    Modal.open({
-      title: 'פתיחת תיק כלוא',
-      size: 'xl',
-      body: `
-        <div class="table-panel-header" style="margin-bottom:8px">זיהוי</div>
-        <div class="form-row form-row-3">
-          <div class="form-group"><label class="form-label">מספר אישי <span class="required">*</span></label>
-            <div style="display:flex;gap:6px"><input id="np-mil" class="form-control"><button type="button" class="btn btn-secondary btn-sm" id="np-lookup">${Utils.icon('search', 13)}</button></div></div>
-          ${inp('np-first', 'שם פרטי', 'readonly')}${inp('np-last', 'שם משפחה', 'readonly')}
-          ${inp('np-nid', 'מספר זהות', 'readonly')}${inp('np-rank', 'דרגה', 'readonly')}${inp('np-unit', 'יחידה', 'readonly')}
-          ${inp('np-gender', 'מין', 'readonly')}${inp('np-birthyear', 'שנת לידה', 'readonly')}
-          ${inp('np-father', 'שם האב')}${inp('np-unitphone', 'טלפון ביחידה')}${inp('np-country', 'ארץ לידה')}
-        </div>
-        <div class="table-panel-header" style="margin:12px 0 8px">קבלה וכליאה</div>
-        <div class="form-row form-row-3">
-          <div class="form-group"><label class="form-label">סוג העצור <span class="required">*</span></label>
-            <select id="np-type" class="form-control"><option value="">בחר</option>${PRISONER_TYPES.map(t => `<option value="${Utils.escHtml(t)}">${Utils.escHtml(t)}</option>`).join('')}</select></div>
-          <div class="form-group"><label class="form-label">תאריך קבלה <span class="required">*</span></label><input type="date" id="np-admission" class="form-control" value="${Utils.today()}"></div>
-          <div class="form-group"><label class="form-label">שעת קבלה <span class="required">*</span></label><input type="time" id="np-time" class="form-control" value="${hhmm}"></div>
-          <div class="form-group"><label class="form-label">בסיס מטפל <span class="required">*</span></label>
-            <select id="np-base" class="form-control">${DEMO_BASES.map(b => `<option value="${b.id}">${Utils.escHtml(b.shortName)}</option>`).join('')}</select></div>
-          <div class="form-group"><label class="form-label">פלוגה</label>
-            <select id="np-company" class="form-control"><option value="">בחר</option>${DETENTION_COMPANIES.map(c => `<option value="${Utils.escHtml(c)}">${Utils.escHtml(c)}</option>`).join('')}</select></div>
-          <div class="form-group"><label class="form-label">מיקום נוכחי</label>
-            <select id="np-location" class="form-control"><option value="">בחר</option>${PRISONER_LOCATIONS.map(c => `<option value="${Utils.escHtml(c)}">${Utils.escHtml(c)}</option>`).join('')}</select></div>
-          <div class="form-group"><label class="form-label">רמת סיכון</label>
-            <select id="np-risk" class="form-control">${RISK_LEVELS.map(r => `<option value="${r.id}">${Utils.escHtml(r.label)}</option>`).join('')}</select></div>
-          <div class="form-group"><label class="form-label">תאריך שחרור משוער</label><input type="date" id="np-release" class="form-control"></div>
-          <div class="form-group"><label class="form-label">עונש (ימים)</label><input type="number" min="0" id="np-sentence" class="form-control"></div>
-          <div class="form-group" style="grid-column:1/-1"><label class="form-label">עילת מעצר / עבירה <span class="required">*</span></label>
-            <select id="np-reason" class="form-control"><option value="">בחר</option>${DETENTION_REASONS.map(r => `<option value="${Utils.escHtml(r)}">${Utils.escHtml(r)}</option>`).join('')}</select></div>
-        </div>
-        <div style="margin:8px 0">${flag('nf-haredi', 'חרדי')}${flag('nf-veg', 'צמחוני')}${flag('nf-kosher', 'מנת בד"צ')}${flag('nf-allergy', 'אלרגני')}${flag('nf-exceptional', 'חריג')}${flag('nf-victim', 'תיק נפגע עבירה')}</div>
-        <div class="form-group"><label class="form-label">הערות</label><textarea id="np-notes" class="form-control" rows="2"></textarea></div>`,
-      footer: `<button class="btn btn-secondary" onclick="Modal.close()">ביטול</button><button class="btn btn-primary" id="np-save">פתח תיק</button>`,
-    });
-
-    let person = null;
-    Utils.el('np-lookup').onclick = () => {
-      const mil = Utils.el('np-mil').value.trim();
-      person = people.find(p => p.militaryNumber === mil) || null;
-      if (!person) { Toast.error('לא נמצא אדם עם מספר אישי זה'); return; }
-      const open = Storage.getCollection(Storage.KEYS.PRISONER_FILES).find(x => x.personId === person.id && x.status === 'active');
-      if (open) { Toast.error('לאדם זה כבר קיים תיק כלוא פעיל'); person = null; return; }
-      const set = (id, v) => { Utils.el(id).value = v || ''; };
-      set('np-first', person.firstName); set('np-last', person.lastName); set('np-nid', person.nationalId);
-      set('np-rank', (RANK_MAP[person.rank] || {}).label); set('np-unit', (DEMO_UNITS.find(u => u.id === person.unitId) || {}).name);
-      set('np-gender', GENDER[person.gender]); set('np-birthyear', person.birthDate ? String(person.birthDate).slice(0, 4) : '');
-    };
-    Utils.el('np-save').onclick = () => {
-      if (!person) { Toast.error('יש לאתר אדם לפי מספר אישי'); return; }
-      const req = { 'np-type': 'סוג העצור', 'np-admission': 'תאריך קבלה', 'np-time': 'שעת קבלה', 'np-reason': 'עילת מעצר' };
-      for (const id in req) { if (!Utils.el(id).value) { Toast.error('שדה חובה: ' + req[id]); Utils.el(id).focus(); return; } }
-      const v = id => Utils.el(id).value.trim();
-      const c = id => Utils.el(id).checked;
-      const file = {
-        id: 'pf_' + Utils.generateId(),
-        fileNumber: 'PF-' + String(Math.floor(Math.random() * 90000) + 10000),
-        personId: person.id,
-        prisonerType: v('np-type'), intakeDate: v('np-admission'), admissionDate: v('np-admission'), intakeTime: v('np-time'),
-        baseId: v('np-base'), company: v('np-company'), detentionCompany: v('np-company'), location: v('np-location'), cell: v('np-location'),
-        riskLevel: v('np-risk'), expectedRelease: v('np-release') || null, sentence: parseInt(v('np-sentence'), 10) || 0,
-        detentionReason: v('np-reason'), offense: v('np-reason'), notes: v('np-notes'),
-        fatherName: v('np-father'), unitPhone: v('np-unitphone'), birthCountry: v('np-country'),
-        haredi: c('nf-haredi'), vegetarian: c('nf-veg'), kosher: c('nf-kosher'), allergies: c('nf-allergy'), exceptional: c('nf-exceptional'), victimFile: c('nf-victim'),
-        status: 'active', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-      };
-      Storage.upsert(Storage.KEYS.PRISONER_FILES, file);
-      if (window.GachlatScreeningService) GachlatScreeningService.refresh();
-      Audit.log({ module: 'incarceration', action: 'create', entityType: 'prisonerFile', entityId: file.id, description: `פתיחת תיק כלוא ${file.fileNumber}` });
-      Modal.close();
-      Toast.success('תיק כלוא נפתח');
-      Router.navigate('/prisoner-file', { id: file.id });
-    };
-  }
 };

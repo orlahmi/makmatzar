@@ -37,6 +37,8 @@
       '/tasks': Pages['tasks'],
       '/add-task': Pages['add-task'],
       '/deserter-retrieval': Pages['deserter-retrieval'],
+      '/new-deserter-file': Pages['new-deserter-file'],
+      '/new-prisoner-file': Pages['new-prisoner-file'],
       '/deserter-file': Pages['deserter-file'],
       '/surveillance-activity-build': Pages['surveillance-activity-build'],
       '/prisoner-file': Pages['prisoner-file'],

@@ -48,3 +48,15 @@ window.CORPS_LIST = [
   'חיל הרפואה', 'חיל התחזוקה', 'חיל האוויר', 'חיל הים', 'מג״ב',
   'מטה כללי', 'אגף המודיעין', 'פיקוד עורף', 'אחר'
 ];
+
+/* Canonical canteens — ONE per company/unit. Stable ids; Hebrew display names. */
+window.CANTEENS = [
+  { id: 'company_a', name: 'קנטינה פלוגה א׳', company: 'פלוגה א׳', baseId: 'b100', type: 'canteen' },
+  { id: 'company_b', name: 'קנטינה פלוגה ב׳', company: 'פלוגה ב׳', baseId: 'b100', type: 'canteen' },
+  { id: 'company_c', name: 'קנטינה פלוגה ג׳', company: 'פלוגה ג׳', baseId: 'b100', type: 'canteen' },
+  { id: 'company_d', name: 'קנטינה פלוגה ד׳', company: 'פלוגה ד׳', baseId: 'b100', type: 'canteen' },
+  { id: 'wing',      name: 'קנטינת אגף',      company: 'אגף',       baseId: 'b100', type: 'canteen' },
+  { id: 'women',     name: 'קנטינת נשים',     company: 'פלוגת נשים', baseId: 'b100', type: 'canteen' },
+];
+// ids used by earlier demo data (before the six-canteen model)
+window.LEGACY_CANTEEN_MAP = { u08: 'company_a', u09: 'company_b' };

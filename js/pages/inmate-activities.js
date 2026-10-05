@@ -142,6 +142,7 @@ Pages['inmate-activities'] = function(query) {
 
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
           <button class="btn btn-secondary btn-sm" id="btn-today">עבור להיום</button>
+          <button class="btn btn-secondary btn-sm" id="btn-permit">${Utils.icon('report', 14)} הפקת אישורי מעבר</button>
           <button class="btn btn-secondary btn-sm" id="btn-export">${Utils.icon('download', 14)} ייצוא</button>
           <button class="btn btn-secondary btn-sm" id="btn-recurring">${Utils.icon('refresh', 14)} פעילות קבועה</button>
           ${canEdit ? `<button class="btn btn-primary" id="btn-add-act">${Utils.icon('plus', 14)} פעילות חדשה</button>` : ''}
@@ -247,6 +248,8 @@ Pages['inmate-activities'] = function(query) {
           </div>
         </div>
 
+        ${renderPermitHistory()}
+
         ${Utils.classificationFooter()}
       </div>
     `;
@@ -266,6 +269,7 @@ Pages['inmate-activities'] = function(query) {
       Utils.el('btn-add-act').onclick = () => showAddActivityModal();
     }
     Utils.el('btn-recurring').onclick = () => showRecurringManagerModal();
+    Utils.el('btn-permit').onclick = () => openPermitModal();
     Utils.el('btn-today').onclick = () => { viewDate = new Date(); selectedDate = today; renderPage(); };
     window.editActivity = (id) => { const act = Storage.getById(Storage.KEYS.INMATE_ACTIVITIES, id); if (act) showAddActivityModal(act); };
 
@@ -520,6 +524,144 @@ Pages['inmate-activities'] = function(query) {
     };
 
     renderList();
+  }
+
+
+  // ================= הפקת אישורי מעבר (per legacy Alon flow) =================
+  // Permit types (legacy): "אישור לחייל ספציפי" = personal permit for one selected prisoner;
+  // "אישור לפעילות" = one shared permit for all prisoners leaving for the same activity on the selected day.
+  // Extra options (legacy): פעילות חריגה (קמ"ן instead of רמ"ן + prison commander signature), copies 1–20.
+  function permitRows(date) {
+    const acts = getActivities(date);
+    const rows = [];
+    acts.forEach(a => {
+      getParticipants(a).forEach(pfid => {
+        const pf = pfMap[pfid]; const p = pf ? pMap[pf.personId] : null;
+        if (!p) return;
+        const planned = plannedOf(a);
+        rows.push({
+          key: a.id + '|' + pfid, activityId: a.id, id: p.militaryNumber, first: p.firstName, last: p.lastName, rank: (RANK_MAP[p.rank] || {}).label || '',
+          type: typeLabel(a), planned: planned === 'כל היום' ? '' : planned, returnPlanned: a.plannedReturn || a.returnTime || '',
+          status: pf.prisonerType || 'אסיר', rams: pf.rams || '', notes: a.notes || '', location: pf.cell || pf.location || '',
+          company: pf.detentionCompany || pf.company || '', baseId: pf.baseId,
+        });
+      });
+    });
+    return rows;
+  }
+  const groupByType = rows => rows.reduce((g, r) => { (g[r.type] = g[r.type] || []).push(r); return g; }, {});
+
+  function nextPermitNumber() {
+    const nums = Storage.getCollection(Storage.KEYS.PASS_PERMITS).map(x => parseInt(x.permitNumber, 10) || 0);
+    return String(Math.max(100000, ...nums) + 1);
+  }
+
+  function openPermitModal() {
+    const date = selectedDate; const rows = permitRows(date);
+    if (!rows.length) { Toast.error('אין רשומות ביום שנבחר להפקת אישורי מעבר'); return; }
+    const groups = groupByType(rows); const types = Object.keys(groups).sort();
+    Modal.open({
+      title: 'הפקת אישורי מעבר',
+      size: 'lg',
+      body: `
+        <div class="form-group"><label class="form-label">סוג אישור <span class="required">*</span></label>
+          <label style="display:flex;gap:8px;align-items:flex-start;margin:6px 0"><input type="radio" name="permitType" value="soldier" checked>
+            <span><strong>אישור לחייל ספציפי</strong><br><small style="color:var(--color-text-muted)">אישור מעבר אישי לכלוא שנבחר מהטבלה</small></span></label>
+          <label style="display:flex;gap:8px;align-items:flex-start;margin:6px 0"><input type="radio" name="permitType" value="activity">
+            <span><strong>אישור לפעילות</strong><br><small style="color:var(--color-text-muted)">אישור מעבר משותף לכל הכלואים היוצאים לאותה פעילות</small></span></label></div>
+        <div class="form-group" id="pm-soldier-field"><label class="form-label">בחירת כלוא <span class="required">*</span></label>
+          <select id="pm-soldier" class="form-control">${rows.map((r, i) => `<option value="${i}">${Utils.escHtml(r.id + ' — ' + r.first + ' ' + r.last + ' (' + r.type + ')')}</option>`).join('')}</select></div>
+        <div class="form-group" id="pm-activity-field" style="display:none"><label class="form-label">בחירת פעילות <span class="required">*</span></label>
+          <div style="display:flex;gap:8px"><select id="pm-activity" class="form-control">${types.map(t => `<option value="${Utils.escHtml(t)}">${Utils.escHtml(t)} (${groups[t].length} כלואים)</option>`).join('')}</select>
+          <button type="button" class="btn btn-secondary btn-sm" id="pm-detail-btn">פירוט כלואים</button></div>
+          <div id="pm-detail" style="display:none;margin-top:8px"></div></div>
+        <label style="display:flex;gap:8px;margin:10px 0"><input type="checkbox" id="pm-exceptional"> פעילות חריגה — אישור קמ״ן (במקום רמ״ן) עם חתימת מפקד הכלא</label>
+        <div class="form-group" style="max-width:200px"><label class="form-label">כמות עותקים להדפסה</label><input type="number" id="pm-copies" class="form-control" min="1" max="20" value="1"></div>
+        <div id="pm-preview" style="margin-top:10px;padding:10px;border:1px solid var(--color-border);border-radius:var(--radius-md);background:var(--color-page-bg);font-size:13px"></div>`,
+      footer: `<button class="btn btn-secondary" onclick="Modal.close()">ביטול</button><button class="btn btn-primary" id="pm-generate">הפקה וצפייה בתצוגה מקדימה</button>`,
+    });
+    const $ = Utils.el; const typeVal = () => document.querySelector('input[name=permitType]:checked').value;
+    const chosen = () => typeVal() === 'soldier' ? [rows[Number($('pm-soldier').value)]].filter(Boolean) : (groups[$('pm-activity').value] || []);
+    function refresh() {
+      const sol = typeVal() === 'soldier'; $('pm-soldier-field').style.display = sol ? '' : 'none'; $('pm-activity-field').style.display = sol ? 'none' : '';
+      const ch = chosen(); const purpose = ch[0] ? ch[0].type : '—';
+      $('pm-preview').innerHTML = `<strong>פורמט: אישור מעבר ודוח מעקב</strong><br>תאריך: ${Utils.formatDate(date)} · לצורך: ${Utils.escHtml(purpose)} · ${ch.length} כלואים<br>${$('pm-exceptional').checked ? 'חתימת קמ״ן + חתימת מפקד הכלא' : 'חתימת רמ״ן'} · ${Utils.escHtml($('pm-copies').value || '1')} עותקים להדפסה`;
+    }
+    function detail() {
+      const ch = groups[$('pm-activity').value] || [];
+      $('pm-detail').innerHTML = `<table class="data-table"><thead><tr><th>מס״ד</th><th>מספר אישי</th><th>שם פרטי</th><th>שם משפחה</th><th>מיקום בכלא</th></tr></thead><tbody>${ch.map((r, i) => `<tr><td>${i + 1}</td><td>${Utils.escHtml(r.id)}</td><td>${Utils.escHtml(r.first)}</td><td>${Utils.escHtml(r.last)}</td><td>${Utils.escHtml(r.location || '—')}</td></tr>`).join('')}</tbody></table>`;
+    }
+    document.querySelectorAll('input[name=permitType]').forEach(r => r.onchange = () => { $('pm-detail').style.display = 'none'; $('pm-detail-btn').textContent = 'פירוט כלואים'; refresh(); });
+    ['pm-soldier', 'pm-exceptional', 'pm-copies'].forEach(id => { $(id).onchange = refresh; $(id).oninput = refresh; });
+    $('pm-activity').onchange = () => { $('pm-detail').style.display = 'none'; $('pm-detail-btn').textContent = 'פירוט כלואים'; refresh(); };
+    $('pm-detail-btn').onclick = () => { const d = $('pm-detail'); const show = d.style.display === 'none'; if (show) detail(); d.style.display = show ? '' : 'none'; $('pm-detail-btn').textContent = show ? 'הסתר פירוט' : 'פירוט כלואים'; };
+    refresh();
+
+    $('pm-generate').onclick = () => {
+      const ch = chosen();
+      if (!ch.length) { Toast.error(typeVal() === 'soldier' ? 'יש לבחור כלוא' : 'יש לבחור פעילות'); return; }
+      const copiesRaw = Number($('pm-copies').value);
+      if (!Number.isInteger(copiesRaw) || copiesRaw < 1 || copiesRaw > 20) { Toast.error('כמות עותקים חייבת להיות מספר שלם בין 1 ל-20'); return; }
+      const u = Auth.getCurrentUser();
+      const permit = {
+        id: 'pm_' + Utils.generateId(), permitNumber: nextPermitNumber(), permitType: typeVal(), exceptional: $('pm-exceptional').checked,
+        purpose: ch[0].type, date, copies: copiesRaw,
+        departureTime: ch.length === 1 ? ch[0].planned : '', returnTime: ch.length === 1 ? ch[0].returnPlanned : '',
+        soldiers: ch.map(r => ({ id: r.id, first: r.first, last: r.last, rank: r.rank, status: r.status, rams: r.rams, notes: r.notes || r.location, company: r.company, baseId: r.baseId })),
+        createdBy: u ? u.firstName + ' ' + u.lastName : '', createdAt: new Date().toISOString(),
+      };
+      Storage.upsert(Storage.KEYS.PASS_PERMITS, permit);
+      Audit.log({ module: 'incarceration', action: 'create', entityType: 'passPermit', entityId: permit.id, description: `הפקת אישור מעבר ${permit.permitNumber} — ${permit.purpose} (${permit.soldiers.length} כלואים)` });
+      Modal.close(); renderPage(); showPermitPreview(permit.id);
+    };
+  }
+
+  function esc(v) { return Utils.escHtml(v == null ? '' : String(v)); }
+  function staffSigTable(title) {
+    return `<p class="sig-title">${esc(title)}</p><table class="form-table sig-table"><thead><tr><th>מספר אישי</th><th>דרגה</th><th>שם משפחה</th><th>שם פרטי</th><th>חתימה</th></tr></thead><tbody><tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr></tbody></table>`;
+  }
+  function permitPageHtml(p, copyNum) {
+    const companies = [...new Set(p.soldiers.map(s => s.company).filter(Boolean))].join(', ');
+    const base = (BASE_MAP[(p.soldiers[0] || {}).baseId] || {}).name || '';
+    const rowsHtml = p.soldiers.map((s, i) => `<tr><td>${i + 1}</td><td>${esc(s.id)}</td><td>${esc(s.first + ' ' + s.last)}</td><td>${esc(s.status || 'אסיר')}</td><td>${esc(s.rams)}</td><td>${esc(s.notes)}</td></tr>`).join('');
+    const authLabel = p.exceptional ? 'חתימת קמ״ן:' : 'חתימת רמ״ן:';
+    return `<section class="permit-page">${p.copies > 1 ? `<p class="copy-mark">עותק ${copyNum} מתוך ${p.copies}</p>` : ''}
+      <div class="notice-box">אישור מעבר זה תקף כאשר הוא חתום, תואם את התאריך הרשום בו ומוצג על ידי איש צוות.</div>
+      <h1 class="form-title">אישור מעבר ודוח מעקב מס׳ <span class="underline">${esc(p.permitNumber)}</span></h1>
+      <p class="facility-line">${companies ? 'לפלוגה: ' + esc(companies) : ''}${companies && base ? ' · ' : ''}${base ? 'מתקן כליאה: ' + esc(base) : ''}</p>
+      <p class="auth-line">ניתן בזה אישור להוצאת הכלואים הרשומים להלן מהמכלאה בתאריך <strong>${esc(Utils.formatDate(p.date))}</strong> לצורך: <strong>${esc(p.purpose)}</strong></p>
+      <table class="form-table"><thead><tr><th>מספר אישי</th><th>דרגה</th><th>שם משפחה</th><th>שם פרטי</th><th>חתימה</th></tr></thead><tbody><tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr></tbody></table>
+      <p class="line-field"><strong>שעת יציאה:</strong> <span class="line">${esc(p.departureTime)}</span></p>
+      <table class="form-table prisoners-table"><thead><tr><th>מס״ד</th><th>מספר אישי</th><th>שם מלא + משפחה</th><th>סטטוס</th><th>רמ״ס</th><th>הערות</th></tr></thead><tbody>${rowsHtml}</tbody></table>
+      <p class="line-field"><strong>${authLabel}</strong> <span class="line"></span></p>
+      ${p.exceptional ? '<p class="line-field"><strong>חתימת מפקד הכלא:</strong> <span class="line"></span></p>' : ''}
+      <p class="line-field"><strong>שעת חזרה:</strong> <span class="line">${esc(p.returnTime)}</span></p>
+      <p class="confirm-text">הנני מאשר קבלת הכלואים הרשומים לעיל:</p>
+      ${staffSigTable('חתימת מד״כ')}${staffSigTable('חתימת סמל')}${staffSigTable('חתימת מ״פ')}</section>`;
+  }
+
+  // in-app permit document view; print shows ONLY the permit (see print.css: body.printing-permit)
+  function showPermitPreview(id) {
+    const p = Storage.getById(Storage.KEYS.PASS_PERMITS, id); if (!p) return;
+    closePermitPreview();
+    let pages = ''; for (let c = 1; c <= p.copies; c++) pages += permitPageHtml(p, c);
+    const root = document.createElement('div'); root.id = 'permit-print-root';
+    root.innerHTML = `<div class="permit-toolbar no-print"><strong>אישור מעבר ${esc(p.permitNumber)}</strong><span style="margin-right:auto"></span>
+      <button class="btn btn-primary btn-sm" id="permit-print-btn">${Utils.icon('print', 14)} הדפס</button><button class="btn btn-secondary btn-sm" id="permit-close-btn">סגור</button></div><div class="permit-pages">${pages}</div>`;
+    document.body.appendChild(root); document.body.classList.add('permit-open');
+    Utils.el('permit-close-btn').onclick = closePermitPreview;
+    Utils.el('permit-print-btn').onclick = () => { document.body.classList.add('printing-permit'); window.print(); setTimeout(() => document.body.classList.remove('printing-permit'), 300); };
+    window.addEventListener('afterprint', () => document.body.classList.remove('printing-permit'), { once: true });
+  }
+  function closePermitPreview() { const r = document.getElementById('permit-print-root'); if (r) r.remove(); document.body.classList.remove('permit-open', 'printing-permit'); }
+  window.showPermitPreview = showPermitPreview;
+
+  function renderPermitHistory() {
+    const list = Storage.getCollection(Storage.KEYS.PASS_PERMITS).filter(x => x.date === selectedDate).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+    return `<div class="table-panel" style="margin-top:var(--space-4)"><div class="table-panel-header"><span>אישורי מעבר שהופקו — ${Utils.escHtml(Utils.formatDate(selectedDate))}</span><span style="font-size:12px;color:var(--color-text-muted)">${list.length}</span></div>
+      <table class="data-table"><thead><tr><th>מס׳ אישור</th><th>סוג אישור</th><th>לצורך</th><th>כלואים</th><th>עותקים</th><th>חתימה</th><th>הופק ע״י</th><th></th></tr></thead><tbody>
+      ${list.length ? list.map(x => `<tr><td class="td-number">${esc(x.permitNumber)}</td><td>${x.permitType === 'soldier' ? 'לחייל ספציפי' : 'לפעילות'}</td><td>${esc(x.purpose)}</td><td>${x.soldiers.length}</td><td>${x.copies}</td><td>${x.exceptional ? 'קמ״ן + מפקד הכלא' : 'רמ״ן'}</td><td>${esc(x.createdBy)}</td><td><button class="btn btn-secondary btn-sm" onclick="window.showPermitPreview('${x.id}')">צפייה / הדפסה</button></td></tr>`).join('') : '<tr><td colspan="8" style="text-align:center;padding:16px;color:var(--color-text-muted)">לא הופקו אישורי מעבר ליום זה</td></tr>'}
+      </tbody></table></div>`;
   }
 
   window._selectCalDate = (dateStr) => {

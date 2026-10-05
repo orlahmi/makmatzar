@@ -9,7 +9,7 @@ Pages['canteen-purchases'] = function(query) {
 
   const canEdit = Permissions.can('createPurchase');
   const canteens = CanteenData.canteens();
-  const canteenName = id => (canteens.find(c => c.id === id) || {}).name || '—';
+  const canteenName = id => CanteenData.canteenName(id);
   const money = CanteenData.money;
   const PAGE = 6;
 
@@ -21,7 +21,7 @@ Pages['canteen-purchases'] = function(query) {
   function getData() {
     let list = Storage.getCollection(Storage.KEYS.CANTEEN_PURCHASES);
     if (filters.baseId) list = list.filter(p => p.baseId === filters.baseId);
-    if (filters.canteenId) list = list.filter(p => p.canteenId === filters.canteenId);
+    if (filters.canteenId) list = list.filter(p => CanteenData.canon(p.canteenId) === filters.canteenId);
     if (filters.dateFrom) list = list.filter(p => p.date >= filters.dateFrom);
     if (filters.dateTo) list = list.filter(p => p.date <= filters.dateTo);
     if (filters.customerMilNum) list = list.filter(p => (p.customerMilitaryNumber || '').includes(filters.customerMilNum.trim()));
@@ -99,7 +99,7 @@ Pages['canteen-purchases'] = function(query) {
                   const b = BASE_MAP[p.baseId];
                   return `<tr class="${selectedId === p.id ? 'row-selected' : ''}" style="cursor:pointer" onclick="window._cpSelect('${p.id}')">
                     <td>${b ? Utils.escHtml(b.code) : '—'}</td>
-                    <td>${Utils.escHtml(p.canteenName || canteenName(p.canteenId))}</td>
+                    <td>${Utils.escHtml(canteenName(p.canteenId))}</td>
                     <td>${Utils.formatDate(p.date)}</td>
                     <td class="td-id">${Utils.escHtml(p.customerMilitaryNumber || '—')}</td>
                     <td>${Utils.escHtml(p.sellerName || p.cashierName || '—')}</td>
