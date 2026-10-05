@@ -214,7 +214,9 @@ Pages['canteen-stock-movements'] = function(query) {
       };
       Storage.upsert(Storage.KEYS.STOCK_MOVEMENTS, mov);
       Audit.log({ module: 'canteen', action: 'create', entityType: 'stockMovement', entityId: mov.id, description: `תנועת מלאי ${num}` });
-      Modal.close(); Toast.success('התנועה נוצרה'); selectedId = mov.id; page = 0; renderPage();
+      Modal.close(); Toast.success('התנועה נוצרה');
+      if (tab !== 'all' && CanteenData.canon(src) !== tab && CanteenData.canon(dst) !== tab) tab = 'all';   // keep the new movement visible
+      selectedId = mov.id; page = 0; renderPage();
     };
   }
 

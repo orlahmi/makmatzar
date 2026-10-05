@@ -10,7 +10,10 @@ Pages['surveillance-activity-build'] = function(query) {
   const deserterFileId = query && query.deserterFileId;
   const user = Auth.getCurrentUser();
   const people = Storage.getCollection(Storage.KEYS.PEOPLE);
-  let teams = [{ id: 1, name: 'צוות א', members: [] }];
+  let teams = [{ id: 1, name: 'צוות א', members: [], outDate: '', outTime: '', returnDate: '', returnTime: '' }];
+  let deserters = [];
+  const activityNumber = 'SAV-' + String(Math.max(0, ...Storage.getCollection(Storage.KEYS.SURVEILLANCE_ACTIVITIES).map(a => parseInt(String(a.number || '').replace(/\D/g, ''), 10) || 0)) + 1).padStart(3, '0');
+  const deserterFiles = Storage.getCollection(Storage.KEYS.DESERTER_FILES).filter(f => f.status === 'active');
   let teamCounter = 0;
   let isDirty = false;
 
@@ -45,9 +48,20 @@ Pages['surveillance-activity-build'] = function(query) {
               <input name="location" class="form-control" required placeholder="כתובת / מקום הפעילות">
             </div>
             <div class="form-group">
-              <label class="form-label">עדיפות</label>
+              <label class="form-label">מספר פעילות</label>
+              <input class="form-control" value="${activityNumber}" readonly>
+            </div>
+            <div class="form-group">
+              <label class="form-label">סטטוס</label>
+              <select name="status" class="form-control">
+                <option value="planned">מתוכננת</option><option value="in_progress">בביצוע</option><option value="completed">הושלמה</option><option value="cancelled">בוטלה</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">רמת מסוכנות</label>
               <select name="priority" class="form-control">
-                ${PRIORITIES.map(p => `<option value="${p.id}" ${p.id === 'high' ? 'selected' : ''}>${Utils.escHtml(p.label)}</option>`).join('')}
+                <option value="">בחר רמה</option>
+                ${RISK_LEVELS.filter(r => r.id !== 'critical').map(r => `<option value="${r.id}">${Utils.escHtml(r.label)}</option>`).join('')}
               </select>
             </div>
             <div class="form-group">
@@ -68,6 +82,16 @@ Pages['surveillance-activity-build'] = function(query) {
               <textarea name="notes" class="form-control" rows="2"></textarea>
             </div>
           </div>
+        </div>
+
+        <!-- סימון עריקים -->
+        <div class="page-section">
+          <div class="section-header">
+            <div class="section-title">סימון עריקים</div>
+            <span style="display:flex;gap:6px"><select id="dm-select" class="form-control" style="min-width:240px"><option value="">בחר עריק / משתמט פעיל</option>${deserterFiles.map(f => { const p = people.find(x => x.id === f.personId); return `<option value="${f.id}">${Utils.escHtml((p ? p.militaryNumber + ' — ' + p.firstName + ' ' + p.lastName : f.fileNumber))}</option>`; }).join('')}</select>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-add-deserter">${Utils.icon('plus', 14)} הוסף</button></span>
+          </div>
+          <div id="deserters-container"></div>
         </div>
 
         <!-- Teams -->
@@ -110,6 +134,28 @@ Pages['surveillance-activity-build'] = function(query) {
     </div>
   `;
 
+  // Deserter marking (legacy: מ.א., דרגה, שם עריק, כתובת, ביקור אחרון, סטטוס)
+  function deserterRow(f) {
+    const p = people.find(x => x.id === f.personId) || {};
+    const addr = (f.addresses || [])[0];
+    const lastVisit = (f.activities || []).map(a => a.date).filter(Boolean).sort().pop() || '';
+    return { deserterFileId: f.id, militaryNumber: p.militaryNumber || '', rank: (RANK_MAP[p.rank] || {}).label || '', name: ((p.firstName || '') + ' ' + (p.lastName || '')).trim(),
+      address: addr ? [addr.address, addr.city].filter(Boolean).join(', ') : (p.address || ''), lastVisit, status: (DESERTER_STATUSES.find(x => x.id === f.status) || {}).label || '' };
+  }
+  function renderDeserters() {
+    const box = Utils.el('deserters-container');
+    if (!deserters.length) { box.innerHTML = '<div style="color:var(--color-text-muted);font-size:var(--font-size-sm)">לא סומנו עריקים לפעילות</div>'; return; }
+    box.innerHTML = `<table class="data-table"><thead><tr><th>מ.א.</th><th>דרגה</th><th>שם עריק</th><th>כתובת</th><th>ביקור אחרון</th><th>סטטוס</th><th></th></tr></thead><tbody>${deserters.map((d, i) => `<tr><td>${Utils.escHtml(d.militaryNumber)}</td><td>${Utils.escHtml(d.rank || '—')}</td><td>${Utils.escHtml(d.name)}</td><td>${Utils.escHtml(d.address || '—')}</td><td>${d.lastVisit ? Utils.formatDate(d.lastVisit) : '—'}</td><td>${Utils.escHtml(d.status)}</td><td><button type="button" class="row-action-btn danger" data-rmd="${i}">${Utils.icon('trash', 12)}</button></td></tr>`).join('')}</tbody></table>`;
+    box.querySelectorAll('[data-rmd]').forEach(b => b.onclick = () => { deserters.splice(Number(b.dataset.rmd), 1); renderDeserters(); });
+  }
+  Utils.el('btn-add-deserter').onclick = () => {
+    const id = Utils.el('dm-select').value; if (!id) { Toast.error('יש לבחור עריק'); return; }
+    if (deserters.some(d => d.deserterFileId === id)) { Toast.error('העריק כבר סומן בפעילות'); return; }
+    deserters.push(deserterRow(deserterFiles.find(f => f.id === id))); renderDeserters();
+  };
+  if (deserterFileId) { const f = Storage.getById(Storage.KEYS.DESERTER_FILES, deserterFileId); if (f) deserters.push(deserterRow(f)); }
+  renderDeserters();
+
   // Teams
   let spots = [];
 
@@ -127,6 +173,9 @@ Pages['surveillance-activity-build'] = function(query) {
           </div>
         </div>
         <div class="card-body">
+          <div class="form-row form-row-3" style="margin-bottom:8px">
+            ${[['outDate', 'תאריך יציאה', 'date'], ['outTime', 'שעת יציאה', 'time'], ['returnDate', 'תאריך חזרה', 'date'], ['returnTime', 'שעת חזרה', 'time']].map(([k, l, t]) => `<div class="form-group"><label class="form-label">${l}</label><input type="${t}" class="form-control team-field" data-ti="${ti}" data-k="${k}" value="${Utils.escHtml(team[k] || '')}"></div>`).join('')}
+          </div>
           ${team.members.length === 0 ? '<div style="color:var(--color-text-muted);font-size:var(--font-size-sm)">לא נוספו חברי צוות</div>' : `
             <table class="data-table">
               <thead><tr><th>אדם</th><th>תפקיד</th><th></th></tr></thead>
@@ -144,11 +193,12 @@ Pages['surveillance-activity-build'] = function(query) {
     `).join('');
 
     container.querySelectorAll('.team-name-input').forEach(el => el.oninput = () => { teams[el.dataset.ti].name = el.value; });
+    container.querySelectorAll('.team-field').forEach(el => el.oninput = () => { teams[el.dataset.ti][el.dataset.k] = el.value; });
   }
 
   Utils.el('btn-add-team').onclick = () => {
     teamCounter++;
-    teams.push({ id: Date.now(), name: `צוות ${String.fromCharCode(1488 + teamCounter)}`, members: [] });
+    teams.push({ id: Date.now(), name: `צוות ${String.fromCharCode(1488 + teamCounter)}`, members: [], outDate: '', outTime: '', returnDate: '', returnTime: '' });
     renderTeams();
   };
 
@@ -222,6 +272,8 @@ Pages['surveillance-activity-build'] = function(query) {
     const data = {};
     fd.forEach((v, k) => { data[k] = v; });
 
+    if (data.endTime && data.endTime < data.startTime) { Toast.error('שעת הסיום לא יכולה להיות לפני שעת ההתחלה'); return; }
+    const badTeam = teams.find(t => (t.returnDate && t.outDate && t.returnDate < t.outDate)); if (badTeam) { Toast.error('תאריך חזרה לפני תאריך יציאה בצוות ' + badTeam.name); return; }
     if (!data.date || !data.startTime || !data.location || !data.objective) {
       Toast.error('יש למלא שדות חובה');
       return;
@@ -236,20 +288,24 @@ Pages['surveillance-activity-build'] = function(query) {
       endTime: data.endTime || '',
       location: data.location,
       objective: data.objective,
-      priority: data.priority || 'high',
+      number: activityNumber,
+      riskLevel: data.priority || '',
+      priority: data.priority || '',
+      deserters,
       commander: data.commander || '',
       authorizedBy: data.authorizedBy || '',
       notes: data.notes || '',
       deserterFileId: data.deserterFileId || null,
-      teams: teams.map(t => ({ name: t.name, members: t.members })),
+      teams: teams.map(t => ({ name: t.name, members: t.members, outDate: t.outDate, outTime: t.outTime, returnDate: t.returnDate, returnTime: t.returnTime })),
       coverageSpots: spots,
       equipment,
-      status: 'planned',
+      status: data.status || 'planned',
+      baseId: (AppState.get('currentBase') || {}).id || 'b708',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
-    Storage.upsert(Storage.KEYS.SURVEILLANCE, activity);
+    Storage.upsert(Storage.KEYS.SURVEILLANCE_ACTIVITIES, activity);
     Audit.log({ module: 'investigation', action: 'create', entityType: 'surveillance', entityId: activity.id, description: `יצירת פעילות מעקב — ${data.location}` });
     Toast.success('פעילות המעקב נשמרה');
 
