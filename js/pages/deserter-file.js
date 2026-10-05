@@ -225,7 +225,7 @@ Pages['deserter-file'] = function(query) {
   }
 
   function renderSurveillance() {
-    const survFiles = Storage.getCollection(Storage.KEYS.SURVEILLANCE_ACTIVITIES).filter(s => s.deserterFileId === fileId);
+    const survFiles = Storage.getCollection(Storage.KEYS.SURVEILLANCE_ACTIVITIES).filter(s => s.deserterFileId === fileId || (s.deserters || []).some(d => d.deserterFileId === fileId));
     return `
       <div class="card">
         <div class="card-header"><div class="card-title">פעילויות בילוש מקושרות</div></div>
