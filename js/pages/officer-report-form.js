@@ -230,10 +230,10 @@ Pages['officer-report-form'] = function(query) {
             <div class="info-list">
               ${infoRow('עבירה', esc(report.offenseTitle))}
               ${offense ? infoRow('קוד', esc(offense.code)) : ''}
-              ${offense ? infoRow('קטגוריה', esc(offense.category)) : ''}
+              ${offense ? infoRow('קטגוריה', esc((((window.OFFENSE_CATEGORIES||[]).find(c=>c.id===offense.categoryId)||{}).label||'—'))) : ''}
               ${infoRow('חומרה', StatusBadge.renderPriority(report.severity))}
               ${infoRow('נקודות', esc(String(report.points)))}
-              ${infoRow('קנס', report.fine ? `₪ ${Utils.formatCurrency(report.fine)}` : '—')}
+              ${infoRow('קנס', report.fine ? Utils.formatCurrency(report.fine) : '—')}
               ${infoRow('מיקום', esc(report.location))}
             </div>
           </div>
@@ -437,7 +437,7 @@ Pages['officer-report-form'] = function(query) {
             ${infoRow('מספר דו"ח', esc(report.reportNumber))}
             ${offense ? infoRow('קוד עבירה', esc(offense.code)) : ''}
             ${offense ? infoRow('שם עבירה', esc(offense.title)) : ''}
-            ${offense ? infoRow('קטגוריה', esc(offense.category)) : ''}
+            ${offense ? infoRow('קטגוריה', esc((((window.OFFENSE_CATEGORIES||[]).find(c=>c.id===offense.categoryId)||{}).label||'—'))) : ''}
             ${infoRow('חומרה', esc(({ low: 'קלה', medium: 'בינונית', high: 'חמורה', critical: 'קריטית' })[report.severity] || report.severity))}
             ${infoRow('נקודות', String(report.points || 0))}
             ${infoRow('קנס (₪)', report.fine ? Utils.formatCurrency(report.fine) : '0')}
