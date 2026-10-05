@@ -12,6 +12,7 @@ Pages['deserter-file'] = function(query) {
   if (!file) { content.innerHTML = EmptyState.notFound(fileId); return; }
 
   // backward-compatible defaults (idempotent, in-memory until the user saves something)
+  if (!file.fileNumber) { const dg = String(file.id || '').replace(/\D/g, ''); file.fileNumber = dg ? 'ED-' + dg.slice(-6).padStart(6, '0') : String(file.id); }
   file.addresses = file.addresses || [];
   file.pastDesertions = file.pastDesertions || [];
   file.activities = file.activities || [];
