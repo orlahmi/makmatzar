@@ -218,9 +218,9 @@ Pages['officer-report-form'] = function(query) {
               ${infoRow('שם משפחה', esc(report.lastName || (person && person.lastName)))}
               ${person ? infoRow('ת.ז.', esc(person.nationalId)) : ''}
               ${person ? infoRow('דרגה', esc(rankLabel(person.rank))) : ''}
-              ${person ? infoRow('חיל', esc(person.corps)) : ''}
-              ${person ? infoRow('טלפון', esc(person.phone)) : ''}
-              ${person ? infoRow('עיר', esc(person.city)) : ''}
+              ${person ? infoRow('חיל', esc((report.accused && report.accused.corps) || person.corps)) : ''}
+              ${person ? infoRow('טלפון', esc((report.accused && report.accused.phone) || person.phone)) : ''}
+              ${person ? infoRow('עיר', esc((report.accused && report.accused.city) || person.city)) : ''}
             </div>
           </div>
         </div>
