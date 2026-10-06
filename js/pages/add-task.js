@@ -39,6 +39,12 @@ Pages['add-task'] = function(query) {
                 <option value="administrative">מנהלתי</option>
               </select>
             </div>
+            <div class="form-group">
+              <label class="form-label">תת קטגוריה <span class="required">*</span></label>
+              <select name="taskSubcategory" id="task-subcategory" class="form-control" required disabled>
+                <option value="">בחר קודם סוג משימה</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -53,13 +59,6 @@ Pages['add-task'] = function(query) {
               <label class="form-label">עדיפות</label>
               <select name="priority" class="form-control">
                 ${PRIORITIES.map(p => `<option value="${p.id}" ${p.id === 'medium' ? 'selected' : ''}>${Utils.escHtml(p.label)}</option>`).join('')}
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="form-label">תת-סוג <span class="required">*</span></label>
-              <select name="taskType" class="form-control" required>
-                <option value="">בחר סוג</option>
-                ${TASK_TYPES.map(t => `<option value="${t.id}">${Utils.escHtml(t.label)}</option>`).join('')}
               </select>
             </div>
             <div class="form-group">
@@ -128,7 +127,18 @@ Pages['add-task'] = function(query) {
   `;
 
   const catSel = Utils.el('task-category');
-  catSel.addEventListener('change', () => { Utils.el('time-star').style.display = catSel.value === 'operational' ? '' : 'none'; });
+  const subSel = Utils.el('task-subcategory');
+  // the allowed subcategories depend on the type; switching type always clears the previous (now incompatible) choice
+  function syncSubcategories() {
+    const list = TASK_SUBCATEGORIES[catSel.value] || [];
+    subSel.innerHTML = list.length
+      ? '<option value="">בחר תת קטגוריה</option>' + list.map(s => '<option value="' + s.id + '">' + Utils.escHtml(s.label) + '</option>').join('')
+      : '<option value="">בחר קודם סוג משימה</option>';
+    subSel.disabled = !list.length;
+    subSel.value = '';
+    Utils.el('time-star').style.display = catSel.value === 'operational' ? '' : 'none';
+  }
+  catSel.addEventListener('change', syncSubcategories);
 
   // Participants
   Utils.el('btn-add-participant').onclick = () => {
@@ -220,9 +230,12 @@ Pages['add-task'] = function(query) {
       showFieldError('commander', 'שדה חובה — יש לבחור מפקד מתוך אנשי הבסיס');
       firstInvalid = firstInvalid || document.querySelector('[name="commander"]');
     }
-    if (!data.taskType) {
-      showFieldError('taskType', 'שדה חובה — יש לבחור סוג משימה');
-      firstInvalid = firstInvalid || document.querySelector('[name="taskType"]');
+    if (data.taskCategory && !data.taskSubcategory) {
+      showFieldError('taskSubcategory', 'שדה חובה — יש לבחור תת קטגוריה');
+      firstInvalid = firstInvalid || document.querySelector('[name="taskSubcategory"]');
+    } else if (data.taskCategory && !(TASK_SUBCATEGORIES[data.taskCategory] || []).some(s => s.id === data.taskSubcategory)) {
+      showFieldError('taskSubcategory', 'תת הקטגוריה אינה תואמת לסוג המשימה');
+      firstInvalid = firstInvalid || document.querySelector('[name="taskSubcategory"]');
     }
     if (!data.date) {
       showFieldError('date', 'שדה חובה — יש לבחור תאריך');
@@ -254,7 +267,7 @@ Pages['add-task'] = function(query) {
       notes: data.notes || '',
       priority: data.priority || 'medium',
       taskCategory: data.taskCategory,
-      taskType: data.taskType,
+      taskSubcategory: data.taskSubcategory,
       date: data.date,
       time: data.time || '',
       status: data.status || 'planned',

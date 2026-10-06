@@ -13,18 +13,25 @@ Pages['hamal-management'] = function(query) {
   let filterKind = '';
   let filterSearch = '';
 
+  // Hamal manages administrative tasks only — the four allowed subcategories
+  const ADMIN_SUBS = TASK_SUBCATEGORIES.administrative;
+  const subOf = (e) => e.subcategory || (e.entryKind === 'administrative' && ADMIN_SUBS.some(s => s.id === e.category) ? e.category : '');
+  const subLabel = (e) => { const l = taskSubcategoryLabel('administrative', subOf(e)); return l || ''; };
+  const actionLabel = (id) => { const a = HAMAL_ACTION_TYPES.find(x => x.id === id); return a ? a.label : (id || '—'); };
+  // legacy records (created before Hamal became administrative-only) keep their historical marking
   function kindBadge(k) {
-    return k === 'operational' ? '<span class="badge badge-danger">מבצעי</span>' : k === 'administrative' ? '<span class="badge badge-info">מנהלתי</span>' : '<span class="badge badge-draft">לא סווג</span>';
+    return k === 'operational' ? '<span class="badge badge-danger">מבצעי (רשומה ישנה)</span>' : k === 'administrative' ? '<span class="badge badge-info">מנהלתי</span>' : '<span class="badge badge-draft">לא סווג</span>';
   }
+  function subBadge(e) { const l = subLabel(e); return l ? '<span class="badge badge-info">' + Utils.escHtml(l) + '</span>' : '<span class="badge badge-draft">לא סווג</span>'; }
 
   function getData() {
     let entries = Storage.getCollection(Storage.KEYS.HAMAL_ENTRIES);
     if (filterDate) entries = entries.filter(e => e.date === filterDate);
-    if (filterKind) entries = entries.filter(e => e.entryKind === filterKind);
-    if (filterCategory) entries = entries.filter(e => e.category === filterCategory);
+    if (filterCategory === '__none') entries = entries.filter(e => !subOf(e));
+    else if (filterCategory) entries = entries.filter(e => subOf(e) === filterCategory);
     if (filterSearch) {
       const q = filterSearch.toLowerCase();
-      entries = entries.filter(e => e.description.toLowerCase().includes(q) || e.actionType.toLowerCase().includes(q));
+      entries = entries.filter(e => (e.description || '').toLowerCase().includes(q) || (e.title || '').toLowerCase().includes(q) || actionLabel(e.actionType).includes(q));
     }
     const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
     return entries.sort((a, b) => {
@@ -54,18 +61,11 @@ Pages['hamal-management'] = function(query) {
               <input type="date" class="form-control" id="f-date" value="${filterDate}">
             </div>
             <div class="form-group">
-              <label class="form-label">סוג</label>
-              <select class="form-control" id="f-kind">
-                <option value="">הכל</option>
-                <option value="operational" ${filterKind === 'operational' ? 'selected' : ''}>מבצעי</option>
-                <option value="administrative" ${filterKind === 'administrative' ? 'selected' : ''}>מנהלתי</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="form-label">קטגוריה</label>
+              <label class="form-label">תת קטגוריה מנהלתית</label>
               <select class="form-control" id="f-category">
                 <option value="">הכל</option>
-                ${HAMAL_CATEGORIES.map(c => `<option value="${c.id}" ${filterCategory === c.id ? 'selected' : ''}>${Utils.escHtml(c.label)}</option>`).join('')}
+                ${ADMIN_SUBS.map(c => `<option value="${c.id}" ${filterCategory === c.id ? 'selected' : ''}>${Utils.escHtml(c.label)}</option>`).join('')}
+                <option value="__none" ${filterCategory === '__none' ? 'selected' : ''}>לא סווג</option>
               </select>
             </div>
             <div class="form-group">
@@ -91,16 +91,15 @@ Pages['hamal-management'] = function(query) {
             <!-- Category pills -->
             <div style="padding:10px 16px;border-bottom:1px solid var(--color-border);display:flex;gap:6px;flex-wrap:wrap">
               <button class="btn btn-sm ${filterCategory==='' ? 'btn-primary' : 'btn-secondary'}" onclick="window._hamalFilterCat('')">הכל</button>
-              ${HAMAL_CATEGORIES.map(c => `<button class="btn btn-sm ${filterCategory===c.id ? 'btn-primary' : 'btn-secondary'}" onclick="window._hamalFilterCat('${c.id}')">${Utils.escHtml(c.label)}</button>`).join('')}
+              ${ADMIN_SUBS.map(c => `<button class="btn btn-sm ${filterCategory===c.id ? 'btn-primary' : 'btn-secondary'}" onclick="window._hamalFilterCat('${c.id}')">${Utils.escHtml(c.label)}</button>`).join('')}
             </div>
             <div style="overflow-x:auto">
               <table class="data-table dense">
                 <thead>
                   <tr>
                     <th style="width:70px">שעה</th>
-                    <th style="width:80px">סוג</th>
-                    <th style="width:130px">סוג פעולה</th>
-                    <th style="width:90px">קטגוריה</th>
+                    <th style="width:130px">תת קטגוריה</th>
+                    <th style="width:100px">סוג פעולה</th>
                     <th>תיאור</th>
                     <th style="width:80px">עדיפות</th>
                     <th style="width:100px">דווח ע"י</th>
@@ -109,15 +108,14 @@ Pages['hamal-management'] = function(query) {
                   </tr>
                 </thead>
                 <tbody>
-                  ${entries.length === 0 ? `<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--color-text-muted)">לא נמצאו רשומות</td></tr>` :
+                  ${entries.length === 0 ? `<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--color-text-muted)">לא נמצאו רשומות</td></tr>` :
                     entries.map(e => {
                       const isCritical = (e.priority === 'critical' || e.priority === 'high') && e.status !== 'closed';
                       return `<tr class="${isCritical ? 'row-critical' : ''}">
                         <td><strong style="font-variant-numeric:tabular-nums">${Utils.escHtml(e.time)}</strong></td>
-                        <td>${kindBadge(e.entryKind)}</td>
-                        <td>${Utils.escHtml(e.actionType)}</td>
-                        <td><span class="badge badge-info">${Utils.escHtml(e.category)}</span></td>
-                        <td style="max-width:220px;white-space:normal;word-break:break-word">${Utils.truncate(e.description, 80)}</td>
+                        <td>${subBadge(e)}${e.entryKind === 'operational' ? '<div style="margin-top:3px">' + kindBadge(e.entryKind) + '</div>' : ''}</td>
+                        <td>${Utils.escHtml(actionLabel(e.actionType))}</td>
+                        <td style="max-width:220px;white-space:normal;word-break:break-word">${Utils.escHtml(Utils.truncate(e.description || e.title || '', 80))}</td>
                         <td>${StatusBadge.renderPriority(e.priority)}</td>
                         <td>${Utils.escHtml(e.reportedBy)}</td>
                         <td>${StatusBadge.render(e.status || 'open')}</td>
@@ -158,7 +156,6 @@ Pages['hamal-management'] = function(query) {
     // Wire filters
     Utils.el('apply-filters').onclick = () => {
       filterDate = Utils.el('f-date').value;
-      filterKind = Utils.el('f-kind').value;
       filterCategory = Utils.el('f-category').value;
       filterSearch = Utils.el('f-search').value;
       renderPage();
@@ -191,8 +188,8 @@ Pages['hamal-management'] = function(query) {
         body: `
           <div class="info-list">
             <div class="info-list-row"><div class="info-list-label">סוג</div><div>${kindBadge(entry.entryKind)}</div></div>
-            <div class="info-list-row"><div class="info-list-label">סוג פעולה</div><div>${Utils.escHtml(entry.actionType)}</div></div>
-            <div class="info-list-row"><div class="info-list-label">קטגוריה</div><div>${Utils.escHtml(entry.category)}</div></div>
+            <div class="info-list-row"><div class="info-list-label">תת קטגוריה</div><div>${subBadge(entry)}</div></div>
+            <div class="info-list-row"><div class="info-list-label">סוג פעולה</div><div>${Utils.escHtml(actionLabel(entry.actionType))}</div></div>
             <div class="info-list-row"><div class="info-list-label">עדיפות</div><div>${StatusBadge.renderPriority(entry.priority)}</div></div>
             <div class="info-list-row"><div class="info-list-label">מדווח</div><div>${Utils.escHtml(entry.reportedBy)}</div></div>
             <div class="info-list-row"><div class="info-list-label">תיאור</div><div style="white-space:pre-line">${Utils.escHtml(entry.description)}</div></div>
@@ -213,9 +210,10 @@ Pages['hamal-management'] = function(query) {
 
   function showAddEntryModal() {
     Modal.open({
-      title: 'הוספת רשומת חמ"ל',
+      title: 'הוספת רשומה מנהלתית — חמ"ל',
       size: 'lg',
       body: `
+        <div class="info-box" style="margin-bottom:12px;font-size:13px;color:var(--color-text-muted)">חמ"ל מנהל משימות מנהלתיות בלבד: דיווח, תיאום, נסיעה מנהלתית ותקלה.</div>
         <div class="form-row form-row-2">
           <div class="form-group">
             <label class="form-label">תאריך <span class="required">*</span></label>
@@ -226,23 +224,16 @@ Pages['hamal-management'] = function(query) {
             <input type="time" class="form-control" id="hamal-time" value="${Utils.currentTimeString().slice(0,5)}">
           </div>
           <div class="form-group">
-            <label class="form-label">סוג <span class="required">*</span></label>
-            <select class="form-control" id="hamal-kind">
-              <option value="">בחר סוג</option>
-              <option value="operational">מבצעי</option>
-              <option value="administrative">מנהלתי</option>
+            <label class="form-label">תת קטגוריה <span class="required">*</span></label>
+            <select class="form-control" id="hamal-category">
+              <option value="">בחר תת קטגוריה</option>
+              ${ADMIN_SUBS.map(c => `<option value="${c.id}">${Utils.escHtml(c.label)}</option>`).join('')}
             </select>
           </div>
           <div class="form-group">
             <label class="form-label">סוג פעולה <span class="required">*</span></label>
             <select class="form-control" id="hamal-action">
               ${HAMAL_ACTION_TYPES.map(a => `<option value="${a.id}">${Utils.escHtml(a.label)}</option>`).join('')}
-            </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label">קטגוריה</label>
-            <select class="form-control" id="hamal-category">
-              ${HAMAL_CATEGORIES.map(c => `<option value="${c.id}">${Utils.escHtml(c.label)}</option>`).join('')}
             </select>
           </div>
           <div class="form-group">
@@ -266,16 +257,17 @@ Pages['hamal-management'] = function(query) {
     window._saveHamalEntry = () => {
       const date = Utils.el('hamal-date').value;
       const time = Utils.el('hamal-time').value;
-      const entryKind = Utils.el('hamal-kind').value;
+      const entryKind = 'administrative';   // fixed by context — Hamal never creates operational entries
       const actionType = Utils.el('hamal-action').value;
       const category = Utils.el('hamal-category').value;
       const priority = Utils.el('hamal-priority').value;
       const description = Utils.el('hamal-desc').value;
-      if (!date || !time || !description.trim() || !entryKind) { Toast.error('יש למלא שדות חובה'); return; }
+      if (!date || !time || !description.trim() || !category) { Toast.error('יש למלא שדות חובה, כולל תת קטגוריה'); return; }
+      if (!ADMIN_SUBS.some(s => s.id === category)) { Toast.error('תת קטגוריה לא חוקית'); return; }
 
       const entry = {
         id: 'h_' + Utils.generateId(),
-        date, time, entryKind, actionType, category, priority, description,
+        date, time, entryKind, actionType, category, subcategory: category, priority, description,
         reportedBy: user ? user.firstName + ' ' + user.lastName : '',
         status: 'open',
         createdAt: new Date().toISOString(),

@@ -19,7 +19,7 @@ Pages['tasks'] = function(query) {
     if (filterStatus) tasks = tasks.filter(t => t.status === filterStatus);
     if (filterPriority) tasks = tasks.filter(t => t.priority === filterPriority);
     if (filterCategory) tasks = tasks.filter(t => t.taskCategory === filterCategory);
-    if (filterType) tasks = tasks.filter(t => t.taskType === filterType);
+    if (filterType) tasks = tasks.filter(t => t.taskSubcategory === filterType);
     if (filterSearch) {
       const q = filterSearch.toLowerCase();
       tasks = tasks.filter(t => t.name.toLowerCase().includes(q) || (t.taskNumber && t.taskNumber.toLowerCase().includes(q)));
@@ -67,10 +67,10 @@ Pages['tasks'] = function(query) {
               </select>
             </div>
             <div class="form-group">
-              <label class="form-label">תת-סוג</label>
+              <label class="form-label">תת קטגוריה</label>
               <select class="form-control" id="f-type">
-                <option value="">כל התת-סוגים</option>
-                ${TASK_TYPES.map(t => `<option value="${t.id}" ${filterType === t.id ? 'selected' : ''}>${Utils.escHtml(t.label)}</option>`).join('')}
+                <option value="">כל תתי הקטגוריות</option>
+                ${(filterCategory ? TASK_SUBCATEGORIES[filterCategory] || [] : TASK_SUBCATEGORIES.operational.concat(TASK_SUBCATEGORIES.administrative)).map(t => `<option value="${t.id}" ${filterType === t.id ? 'selected' : ''}>${Utils.escHtml(t.label)}</option>`).join('')}
               </select>
             </div>
             <div class="form-group">
@@ -102,7 +102,7 @@ Pages['tasks'] = function(query) {
         { key: 'name', label: 'שם המשימה' },
         { key: 'priority', label: 'עדיפות', render: v => StatusBadge.renderPriority(v) },
         { key: 'taskCategory', label: 'סוג', render: v => v === 'operational' ? '<span class="badge badge-danger">מבצעי</span>' : v === 'administrative' ? '<span class="badge badge-info">מנהלתי</span>' : '<span class="badge badge-draft">לא סווג</span>' },
-        { key: 'taskType', label: 'תת-סוג', render: v => (TASK_TYPE_MAP[v] ? Utils.escHtml(TASK_TYPE_MAP[v].label) : '—') },
+        { key: 'taskSubcategory', label: 'תת קטגוריה', render: (v, row) => { const l = taskSubcategoryLabel(row.taskCategory, v); return l ? Utils.escHtml(l) : '<span class="badge badge-draft">לא סווג</span>'; } },
         { key: 'date', label: 'תאריך', render: v => Utils.formatDate(v) },
         { key: 'time', label: 'שעה', render: v => v || '—' },
         { key: 'status', label: 'סטטוס', render: v => StatusBadge.render(v) },
@@ -134,7 +134,8 @@ Pages['tasks'] = function(query) {
 
     Utils.el('f-category').addEventListener('change', () => {
       filterCategory = Utils.el('f-category').value;
-      { const d = getData(); tableInstance.update(d); const hc = document.querySelector('.table-panel-header span:last-child'); if (hc) hc.textContent = d.length + ' רשומות'; }
+      filterType = '';   // subcategory options depend on the type — drop a now-incompatible selection
+      renderPage();
     });
 
     Utils.el('f-type').addEventListener('change', () => {

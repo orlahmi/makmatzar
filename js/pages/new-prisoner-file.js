@@ -111,7 +111,27 @@ Pages['new-prisoner-file'] = function(query) {
     // values that came from the source stay locked; only missing ones are completable here
     ['np-nid', 'np-first', 'np-last', 'np-phone'].forEach(i => { $(i).readOnly = !!$(i).value && i !== 'np-phone'; });
     const ex = activeFor(person.id); if (ex) showDup(ex); else Toast.success('פרטי האדם נשלפו');
+    showLinked(person);
   };
+
+  // information that already exists about this person (nothing is copied — it is shown / linked)
+  function showLinked(p) {
+    let box = $('np-linked');
+    if (!box) { box = document.createElement('div'); box.id = 'np-linked'; box.className = 'info-box'; box.style.cssText = 'margin:8px 0;font-size:13px'; $('np-dup').insertAdjacentElement('afterend', box); }
+    const des = Storage.getCollection(Storage.KEYS.DESERTER_FILES).find(f => f.personId === p.id && f.status === 'active');
+    const vsr = DocumentService.vsrFor(p.id);
+    const parts = [];
+    if (des) parts.push('לאדם זה קיים תיק ' + ((des.type || des.deserterType) === 'shirker' ? 'משתמט' : 'עריק') + ' פעיל (<a href="#/deserter-file?id=' + des.id + '">פתיחת התיק</a>)');
+    if (vsr.length) parts.push('וס״ר קיים במערכת (מקור: ' + Utils.escHtml(DocumentService.sourceInfo(vsr[0]).label) + ') — יוצג בלשונית רפואה בתיק הכלוא, אין צורך להעלות שוב');
+    box.innerHTML = parts.join('<br>');
+    box.style.display = parts.length ? 'block' : 'none';
+  }
+
+  // opened from a deserter file: identity comes straight from the person record (no re-typing of the military number)
+  if (!coord && query && query.personId) {
+    const pp = Storage.getById(Storage.KEYS.PEOPLE, query.personId);
+    if (pp) { $('np-mil').value = pp.militaryNumber; $('np-lookup').click(); }
+  }
 
   // opened from a Mashlat coordination: prefill from it (identity still comes from the person dataset)
   if (coord) {
