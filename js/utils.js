@@ -412,8 +412,22 @@ window.Utils = (function() {
     return new Promise(resolve => setTimeout(resolve, ms || 300));
   }
 
+  /* ===== Auto-filled field marking: subtle tag + tint on fields whose value came from a lookup ===== */
+  function markAuto(ids, on) {
+    (Array.isArray(ids) ? ids : [ids]).forEach(function(id) {
+      var el = typeof id === 'string' ? document.getElementById(id) : id;
+      if (!el) return;
+      el.classList.toggle('is-auto', !!on);
+      var grp = el.closest('.form-group'); var lab = grp && grp.querySelector('.form-label');
+      if (!lab) return;
+      var tag = lab.querySelector('.auto-tag');
+      if (on && !tag) { tag = document.createElement('span'); tag.className = 'auto-tag'; tag.textContent = 'נשלף אוטומטית'; lab.appendChild(tag); }
+      if (!on && tag) tag.remove();
+    });
+  }
+
   return {
-    generateId, generateSequentialId,
+    generateId, generateSequentialId, markAuto,
     formatDate, formatDateTime, formatTime,
     today, now, daysBetween, addDays, isoToDisplay, displayToIso,
     formatCurrency, formatNumber, pad, initials, truncate,

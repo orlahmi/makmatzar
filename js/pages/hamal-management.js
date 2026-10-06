@@ -18,9 +18,9 @@ Pages['hamal-management'] = function(query) {
   const subOf = (e) => e.subcategory || (e.entryKind === 'administrative' && ADMIN_SUBS.some(s => s.id === e.category) ? e.category : '');
   const subLabel = (e) => { const l = taskSubcategoryLabel('administrative', subOf(e)); return l || ''; };
   const actionLabel = (id) => { const a = HAMAL_ACTION_TYPES.find(x => x.id === id); return a ? a.label : (id || '—'); };
-  // legacy records (created before Hamal became administrative-only) keep their historical marking
+  // Hamal is administrative-only: legacy records that were not clearly administrative are simply shown as unclassified
   function kindBadge(k) {
-    return k === 'operational' ? '<span class="badge badge-danger">מבצעי (רשומה ישנה)</span>' : k === 'administrative' ? '<span class="badge badge-info">מנהלתי</span>' : '<span class="badge badge-draft">לא סווג</span>';
+    return k === 'administrative' ? '<span class="badge badge-info">מנהלתי</span>' : '<span class="badge badge-draft">לא סווג</span>';
   }
   function subBadge(e) { const l = subLabel(e); return l ? '<span class="badge badge-info">' + Utils.escHtml(l) + '</span>' : '<span class="badge badge-draft">לא סווג</span>'; }
 
@@ -113,7 +113,7 @@ Pages['hamal-management'] = function(query) {
                       const isCritical = (e.priority === 'critical' || e.priority === 'high') && e.status !== 'closed';
                       return `<tr class="${isCritical ? 'row-critical' : ''}">
                         <td><strong style="font-variant-numeric:tabular-nums">${Utils.escHtml(e.time)}</strong></td>
-                        <td>${subBadge(e)}${e.entryKind === 'operational' ? '<div style="margin-top:3px">' + kindBadge(e.entryKind) + '</div>' : ''}</td>
+                        <td>${subBadge(e)}</td>
                         <td>${Utils.escHtml(actionLabel(e.actionType))}</td>
                         <td style="max-width:220px;white-space:normal;word-break:break-word">${Utils.escHtml(Utils.truncate(e.description || e.title || '', 80))}</td>
                         <td>${StatusBadge.renderPriority(e.priority)}</td>
@@ -134,9 +134,9 @@ Pages['hamal-management'] = function(query) {
 
           <!-- Notes panel -->
           <div class="table-panel" style="position:sticky;top:16px">
-            <div class="table-panel-header">הערות כלליות / יומן מבצעים</div>
+            <div class="table-panel-header">הערות כלליות / יומן משמרת</div>
             <div style="padding:16px">
-              <textarea id="hamal-notes-area" class="form-control" style="min-height:200px;resize:vertical;font-size:13px" placeholder="הערות תפעוליות..."></textarea>
+              <textarea id="hamal-notes-area" class="form-control" style="min-height:200px;resize:vertical;font-size:13px" placeholder="הערות למשמרת..."></textarea>
               <div style="margin-top:10px;display:flex;justify-content:flex-end">
                 <button class="btn btn-primary btn-sm" id="btn-save-notes">שמור</button>
               </div>

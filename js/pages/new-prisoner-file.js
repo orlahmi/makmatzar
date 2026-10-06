@@ -101,7 +101,7 @@ Pages['new-prisoner-file'] = function(query) {
     const mil = $('np-mil').value.trim();
     person = people.find(p => p.militaryNumber === mil) || null;
     $('np-dup').style.display = 'none';
-    ['np-nid', 'np-first', 'np-last', 'np-rank', 'np-unit', 'np-gender', 'np-birth', 'np-phone'].forEach(i => { $(i).value = ''; $(i).readOnly = false; });
+    ['np-nid', 'np-first', 'np-last', 'np-rank', 'np-unit', 'np-gender', 'np-birth', 'np-phone'].forEach(i => { $(i).value = ''; $(i).readOnly = false; Utils.markAuto(i, false); });
     $('np-rank').readOnly = $('np-unit').readOnly = $('np-gender').readOnly = $('np-birth').readOnly = true;
     if (!person) { Toast.error('לא נמצא אדם עם מספר אישי זה במאגר'); return; }
     const set = (id, v) => { $(id).value = v || ''; };
@@ -110,6 +110,8 @@ Pages['new-prisoner-file'] = function(query) {
     set('np-gender', GENDER[person.gender]); set('np-birth', person.birthDate ? Utils.formatDate(person.birthDate) : '');
     // values that came from the source stay locked; only missing ones are completable here
     ['np-nid', 'np-first', 'np-last', 'np-phone'].forEach(i => { $(i).readOnly = !!$(i).value && i !== 'np-phone'; });
+    // fields that arrived from the people dataset are tagged; empty ones are left for the operator to complete
+    ['np-nid', 'np-first', 'np-last', 'np-rank', 'np-unit', 'np-gender', 'np-birth', 'np-phone'].forEach(i => Utils.markAuto(i, !!$(i).value));
     const ex = activeFor(person.id); if (ex) showDup(ex); else Toast.success('פרטי האדם נשלפו');
     showLinked(person);
   };

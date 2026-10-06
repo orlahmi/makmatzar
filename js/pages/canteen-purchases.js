@@ -318,7 +318,11 @@ Pages['canteen-purchases'] = function(query) {
       };
       Storage.upsert(Storage.KEYS.CANTEEN_PURCHASES, purchase);
       Audit.log({ module: 'canteen', action: 'create', entityType: 'purchase', entityId: purchase.id, description: `קנייה ${purchase.purchaseNumber} — ${money(purchase.total)}` });
-      Modal.close(); Toast.success('הקנייה נשמרה');
+      Modal.close();
+      // never silently hide the record the operator just created: if an active filter excludes it, clear the filters and say so
+      let msg = 'הקנייה נשמרה';
+      if (!getData().some(p => p.id === purchase.id)) { filters = Object.assign({}, EMPTY); msg = 'הקנייה נשמרה — הסינון נוקה כדי להציג אותה'; }
+      Toast.success(msg);
       selectedId = purchase.id; page = 0; renderPage();
     };
   }

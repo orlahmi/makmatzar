@@ -133,6 +133,34 @@ window.Validation = (function() {
     });
   }
 
+  // Global live clearing: an error marker disappears as soon as the field becomes valid (no need to press save again).
+  // Format-validated fields are re-checked with their own validator; everything else clears once it has a value.
+  function isNowValid(el) {
+    if (el.type === 'checkbox') return el.checked;
+    const v = String(el.value || '').trim();
+    if (!v) return false;
+    const n = el.name || el.id || '';
+    if (/militaryNumber|^mil$|np-mil/i.test(n) && Utils.isValidMilNum) return Utils.isValidMilNum(v);
+    if (/nationalId|nid|np-nid/i.test(n) && Utils.isValidNationalId) return Utils.isValidNationalId(v);
+    if (el.type === 'number' && el.min !== '' && Number(v) < Number(el.min)) return false;
+    return true;
+  }
+  function liveClear(e) {
+    const el = e.target;
+    if (!el || !el.classList) return;
+    const marked = el.classList.contains('is-invalid') || (el.style && el.style.borderColor && /danger|rgb\(2[0-9]{2}, ?\d+, ?\d+\)/.test(el.style.borderColor));
+    if (!marked || !isNowValid(el)) return;
+    clearFieldError(el);
+    if (el.style) el.style.borderColor = '';
+    const p = el.parentNode;
+    if (p) p.querySelectorAll('.field-error').forEach(x => x.remove());
+  }
+  if (!window._validationLiveBound) {
+    window._validationLiveBound = true;
+    document.addEventListener('input', liveClear, true);
+    document.addEventListener('change', liveClear, true);
+  }
+
   return {
     validateField, validateForm, clearForm, setupLiveValidation,
     showFieldError, clearFieldError, showFieldSuccess,

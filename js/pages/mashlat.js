@@ -893,6 +893,7 @@ Pages['mashlat'] = function(query) {
       var found = people.find(function(pp) { return pp.militaryNumber === q || pp.nationalId === q; });
       if (!found) {
         /* Manual entry — still update external sections with null person */
+        Utils.markAuto(['mc-first', 'mc-last'], false);
         updatePostLookupSections(null, null);
         Toast.warning('לא נמצא חייל עם מספר זה — ניתן להזין ידנית');
         return;
@@ -918,6 +919,7 @@ Pages['mashlat'] = function(query) {
       var lastEl  = Utils.el('mc-last');  if (lastEl)  { lastEl.value  = person.lastName;  lastEl.removeAttribute('readonly');  lastEl.setAttribute('readonly', ''); }
       Utils.el('mc-rank-val').value    = person.rank || '';
       Utils.el('mc-service-val').value = person.serviceType || '';
+      Utils.markAuto(['mc-first', 'mc-last'], true);
       Toast.show('נטען: ' + person.firstName + ' ' + person.lastName, 'success');
       var destEl = Utils.el('mc-dest');
       updatePostLookupSections(person.id, destEl ? destEl.value : null);

@@ -122,6 +122,37 @@ window.Migrations = (function() {
         Storage.setCollection(K.HAMAL_ENTRIES, h);
       },
     },
+    {
+      // Temporary records created by earlier QA sessions (ids generated at runtime: <prefix>_m<time><rand>) are soft-deleted
+      // so the presentation dataset contains only the baseline demo data. Seed data uses fixed ids (pf001, sm002 ...) and is untouched.
+      // Soft delete only: nothing is destroyed. Idempotent (flagged once; re-running finds nothing left).
+      id: '2026-10-qa-artifact-cleanup',
+      run() {
+        const K = Storage.KEYS;
+        const GEN = /^(df|mslt|ce|ia|ir|r|er|cp|sv|sm|sw|tsk|doc|pf|pm|h|cs)_m[a-z0-9]{8,}$/;
+        const cols = [K.DESERTER_FILES, K.MASHLAT_COORDINATIONS, K.COUNTING_ENTRIES, K.INMATE_ACTIVITIES, K.INMATE_RECURRING_ACTIVITIES, K.POLICE_REPORTS,
+          K.EVENT_REPORTS, K.CANTEEN_PURCHASES, K.SURVEILLANCE_ACTIVITIES, K.STOCK_MOVEMENTS, K.SERVICE_WORK_FILES, K.TASKS, K.DOCUMENTS,
+          K.PRISONER_FILES, K.PASS_PERMITS, K.HAMAL_ENTRIES, K.COUNTING_SESSIONS];
+        const removed = {};
+        cols.forEach(key => {
+          removed[key] = new Set();
+          Storage.getCollection(key).forEach(r => { if (r && GEN.test(String(r.id))) { removed[key].add(r.id); Storage.softDelete(key, r.id); } });
+        });
+        const dropWhere = (key, fn) => Storage.getCollection(key).forEach(r => { if (fn(r)) Storage.softDelete(key, r.id); });
+        const gone = (key, id) => removed[key] && removed[key].has(id);
+        dropWhere(K.CANTEEN_PURCHASE_ITEMS, i => gone(K.CANTEEN_PURCHASES, i.purchaseId));
+        dropWhere(K.STOCK_MOVEMENT_ITEMS, i => gone(K.STOCK_MOVEMENTS, i.movementId) || /^sm_m[a-z0-9]{8,}/.test(String(i.id)));
+        dropWhere(K.COUNTING_ENTRIES, e => gone(K.COUNTING_SESSIONS, e.sessionId));
+        dropWhere(K.GACHLAT_CANDIDATES, c => gone(K.PRISONER_FILES, c.prisonerFileId));
+        // a baseline stock movement approved during QA goes back to the state it was seeded in (pending)
+        Storage.getCollection(K.STOCK_MOVEMENTS).forEach(m => {
+          if (/^sm\d{3}$/.test(m.id) && m.status === 'approved' && m.approverName === 'משתמש מערכת') {
+            Storage.getCollection(K.STOCK_MOVEMENT_ITEMS).filter(i => i.movementId === m.id || (m.items || []).indexOf(i.id) !== -1).forEach(i => Storage.upsert(K.STOCK_MOVEMENT_ITEMS, Object.assign({}, i, { approvedQty: null })));
+            Storage.upsert(K.STOCK_MOVEMENTS, Object.assign({}, m, { status: 'pending', approverName: null, approverId: null, approvalDate: null }));
+          }
+        });
+      },
+    },
   ];
 
   function runAll() {

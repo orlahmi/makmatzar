@@ -214,8 +214,13 @@ Pages['canteen-stock-movements'] = function(query) {
       };
       Storage.upsert(Storage.KEYS.STOCK_MOVEMENTS, mov);
       Audit.log({ module: 'canteen', action: 'create', entityType: 'stockMovement', entityId: mov.id, description: `תנועת מלאי ${num}` });
-      Modal.close(); Toast.success('התנועה נוצרה');
-      if (tab !== 'all' && CanteenData.canon(src) !== tab && CanteenData.canon(dst) !== tab) tab = 'all';   // keep the new movement visible
+      Modal.close();
+      // never silently hide the new movement: relax whichever active tab/filter would exclude it, and say so
+      let msg = 'התנועה נוצרה', relaxed = false;
+      if (tab !== 'all' && CanteenData.canon(src) !== tab && CanteenData.canon(dst) !== tab) { tab = 'all'; relaxed = true; }
+      if (filterApproved === 'yes' || (filterDate && filterDate !== date)) { filterApproved = ''; filterDate = ''; relaxed = true; }
+      if (relaxed) msg += ' — הסינון עודכן כדי להציג אותה';
+      Toast.success(msg);
       selectedId = mov.id; page = 0; renderPage();
     };
   }
