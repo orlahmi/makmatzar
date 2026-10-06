@@ -12,6 +12,28 @@ window.TASK_ACTIVITY_TYPES = [
   { id: 'admin', label: 'משימה מנהלתית' },
 ];
 
+/* strict task classification: top-level type -> allowed subcategories (administrative has exactly four) */
+window.TASK_SUBCATEGORIES = {
+  administrative: [
+    { id: 'report', label: 'דיווח' },
+    { id: 'coordination', label: 'תיאום' },
+    { id: 'admin_travel', label: 'נסיעה מנהלתית' },
+    { id: 'malfunction', label: 'תקלה' },
+  ],
+  operational: [
+    { id: 'patrol', label: 'סיור' },
+    { id: 'checkpoint', label: 'מחסום' },
+    { id: 'security', label: 'אבטחה' },
+    { id: 'escort', label: 'ליווי' },
+    { id: 'arrest', label: 'מעצר' },
+    { id: 'investigation', label: 'בילוש' },
+    { id: 'reinforcement', label: 'תגבור' },
+  ],
+};
+window.TASK_SUBCATEGORY_LABELS = {};
+Object.keys(TASK_SUBCATEGORIES).forEach(function(k) { TASK_SUBCATEGORIES[k].forEach(function(s) { TASK_SUBCATEGORY_LABELS[k + ':' + s.id] = s.label; }); });
+window.taskSubcategoryLabel = function(category, sub) { return (category && sub && TASK_SUBCATEGORY_LABELS[category + ':' + sub]) || ''; };
+
 window.HAMAL_ACTION_TYPES = [
   { id: 'entry', label: 'כניסה' },
   { id: 'exit', label: 'יציאה' },
@@ -28,6 +50,7 @@ window.HAMAL_CATEGORIES = [
   { id: 'report', label: 'דיווח' },
   { id: 'coordination', label: 'תיאום' },
   { id: 'malfunction', label: 'תקלה' },
+  { id: 'admin_travel', label: 'נסיעה מנהלתית' },
 ];
 
 window.INMATE_ACTIVITY_TYPES_LEGACY_LABELS = [

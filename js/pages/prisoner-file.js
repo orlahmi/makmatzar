@@ -192,6 +192,16 @@ Pages['prisoner-file'] = function(query) {
               <div class="identity-panel-item"><div class="identity-panel-label">קבלה</div><div class="identity-panel-value">${fd(file.admissionDate)}</div></div>
               ${daysLeft !== null ? `<div class="identity-panel-item"><div class="identity-panel-label">שחרור</div><div class="identity-panel-value" style="${daysLeftColor};font-weight:700">${daysLeftLabel}</div></div>` : ''}
             </div>
+            ${(function() {
+              const h = file.health || {};
+              const b = [];
+              if (h.lifeSavingMeds === 'yes') b.push('<span class="badge badge-danger">תרופות מצילות חיים</span>');
+              if (file.mobilityLimit === 'yes') b.push('<span class="badge badge-warning">הגבלת ניידות</span>');
+              if (file.visionLimit === 'yes') b.push('<span class="badge badge-warning">מגבלת ראייה</span>');
+              if (h.sensitivities) b.push('<span class="badge badge-warning">רגישויות</span>');
+              if (file.personId && DocumentService.vsrFor(file.personId).length) b.push('<span class="badge badge-info">וס״ר במערכת</span>');
+              return b.length ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">' + b.join('') + '</div>' : '';
+            })()}
           </div>
         </div>
 
@@ -205,7 +215,7 @@ Pages['prisoner-file'] = function(query) {
           <div class="tab-panel" data-tab="detention">${renderPrisonerDetention(file, esc, fd)}</div>
           <div class="tab-panel" data-tab="activities">${renderPrisonerActivities(file, fd, esc)}</div>
           <div class="tab-panel" data-tab="restrictions">${renderPrisonerRestrictions(file, esc, fd)}</div>
-          <div class="tab-panel" data-tab="health">${renderPrisonerHealth(file, esc, fd)}</div>
+          <div class="tab-panel" data-tab="medical">${renderPrisonerMedical(file, person, esc, fd)}</div>
           <div class="tab-panel" data-tab="visits">${renderPrisonerVisits(file, esc, fd)}</div>
           <div class="tab-panel" data-tab="disciplines">${renderPrisonerDisciplines(file, esc, fd)}</div>
           <div class="tab-panel" data-tab="behavior">${renderPrisonerBehavior(file, esc, fd)}</div>
@@ -234,7 +244,7 @@ Pages['prisoner-file'] = function(query) {
         { id: 'detention', label: 'כליאה' },
         { id: 'activities', label: 'פעילויות' },
         { id: 'restrictions', label: 'הגבלות' },
-        { id: 'health', label: 'בריאות' },
+        { id: 'medical', label: 'רפואה' },
         { id: 'visits', label: 'ביקורים' },
         { id: 'disciplines', label: 'ענישה' },
         { id: 'behavior', label: 'התנהגות' },
@@ -258,6 +268,9 @@ Pages['prisoner-file'] = function(query) {
   }
 
   // ---------- פרטים אישיים (old prisoner-file personal block; fields stored on the file) ----------
+  function ynSel(id, v, dis) {
+    return `<select id="${id}" class="form-control" ${dis}><option value="">— לא הוזן —</option><option value="yes" ${v === 'yes' ? 'selected' : ''}>כן</option><option value="no" ${v === 'no' ? 'selected' : ''}>לא</option></select>`;
+  }
   function renderPersonalDetails(file, person, esc) {
     const cand = Storage.getCollection(Storage.KEYS.GACHLAT_CANDIDATES).some(c => c.prisonerFileId === file.id);
     const year = person && person.birthDate ? String(person.birthDate).slice(0, 4) : '';
@@ -280,6 +293,9 @@ Pages['prisoner-file'] = function(query) {
               <div class="form-group"><label class="form-label">שנת לידה</label><input class="form-control" value="${Utils.escHtml(year)}" readonly></div>
               <div class="form-group"><label class="form-label">ארץ לידה</label><input id="pp-country" class="form-control" value="${Utils.escHtml(file.birthCountry || '')}" ${dis}></div>
               <div class="form-group"><label class="form-label">רמת סיכון</label><div>${StatusBadge.renderRisk(file.riskLevel)}</div></div>
+              <div class="form-group"><label class="form-label">ביק כלוא</label><input id="pp-bik" class="form-control" value="${Utils.escHtml(file.bikPrisoner || '')}" ${dis}></div>
+              <div class="form-group"><label class="form-label">הגבלת ניידות</label>${ynSel('pp-mobility', file.mobilityLimit, dis)}</div>
+              <div class="form-group"><label class="form-label">מגבלת ראייה</label>${ynSel('pp-vision', file.visionLimit, dis)}</div>
             </div>
             <div style="display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:6px">
               ${PERSONAL_FLAGS.map(([k, l]) => `<label style="display:flex;gap:6px;align-items:center"><input type="checkbox" class="pp-flag" data-k="${k}" ${file[k] ? 'checked' : ''} ${dis}> ${l}</label>`).join('')}
@@ -292,6 +308,7 @@ Pages['prisoner-file'] = function(query) {
   window.savePrisonerPersonal = (fid) => {
     const f = Storage.getById(Storage.KEYS.PRISONER_FILES, fid);
     f.fatherName = Utils.el('pp-father').value.trim(); f.unitPhone = Utils.el('pp-unitphone').value.trim(); f.birthCountry = Utils.el('pp-country').value.trim();
+    f.bikPrisoner = Utils.el('pp-bik').value.trim(); f.mobilityLimit = Utils.el('pp-mobility').value; f.visionLimit = Utils.el('pp-vision').value;
     document.querySelectorAll('.pp-flag').forEach(c => { f[c.dataset.k] = c.checked; });
     if (window._pfPhoto) f.photo = window._pfPhoto;
     f.updatedAt = new Date().toISOString(); Storage.upsert(Storage.KEYS.PRISONER_FILES, f);
@@ -514,25 +531,89 @@ Pages['prisoner-file'] = function(query) {
     return card('הגבלות', addBtn(file.id, 'restrictions', 'הוסף הגבלה'),
       simpleTable(file, 'restrictions', ['סוג', 'מתאריך', 'עד תאריך', 'סיבה'], r => [esc(r.type), fd(r.from), fd(r.to), esc(r.reason)], 'אין הגבלות מיוחדות.', esc));
   }
-  function renderPrisonerHealth(file, esc, fd) {
+  // ---------- רפואה (medical) ----------
+  // profile is the SAME field as the one in "מיון ושיבוץ" (file.profile) — never a second copy.
+  function renderPrisonerMedical(file, person, esc, fd) {
     const h = file.health || {};
+    const dis = canEdit ? '' : 'disabled';
+    window._docRefresh = () => pfDocRefresh(file.id);
+    const yn = (v, id) => `<select id="${id}" class="form-control" ${dis}><option value="">— לא הוזן —</option><option value="yes" ${v === 'yes' ? 'selected' : ''}>כן</option><option value="no" ${v === 'no' ? 'selected' : ''}>לא</option></select>`;
+    const txt = (id, v, ph) => `<input id="${id}" class="form-control" value="${Utils.escHtml(v || '')}" ${ph ? `placeholder="${ph}"` : ''} ${dis}>`;
+    const docs = file.personId ? DocumentService.forPerson(file.personId, ['medical', 'vsr']) : [];
+    const hasVsr = docs.some(d => d.docType === 'vsr');
+    const saveBtn = canEdit ? `<button class="btn btn-primary btn-sm" onclick="window.savePrisonerMedical('${file.id}')">שמור</button>` : '';
     return `
-      <div class="card">
-        <div class="card-header"><div class="card-title">מצב בריאותי</div></div>
-        <div class="card-body">
-          <div class="info-list">
-            ${file.medicalNotes ? infoRow('הערות רפואיות (מפתיחת התיק)', esc(file.medicalNotes)) : ''}
-            ${infoRow('מצב כללי', esc(h.generalStatus))}
-            ${infoRow('מגבלות רפואיות', esc(h.medicalRestrictions))}
-            ${infoRow('תרופות', esc(h.medications))}
-            ${infoRow('בדיקה רפואית אחרונה', fd(h.lastCheckup))}
-            ${infoRow('רופא אחראי', esc(h.doctor))}
+      <div class="tab-section-grid">
+        <div class="card" style="grid-column:1/-1">
+          <div class="card-header"><div class="card-title">פרופיל וסיכון רפואי</div>${saveBtn}</div>
+          <div class="card-body">
+            <div class="form-row form-row-3">
+              <div class="form-group"><label class="form-label">בתי כלוא</label>${txt('pm-bati', h.bati)}</div>
+              <div class="form-group"><label class="form-label">פרופיל</label>${txt('pm-profile', (file.classification || {}).profile || file.profile)}</div>
+              <div class="form-group"><label class="form-label">תרופות מצילות חיים</label>${yn(h.lifeSavingMeds, 'pm-lifesaving')}</div>
+            </div>
+            <div class="form-group"><label class="form-label">רגישויות</label><textarea id="pm-sens" class="form-control" rows="2" ${dis}>${Utils.escHtml(h.sensitivities || '')}</textarea></div>
           </div>
-          ${!h.generalStatus ? '<div class="empty-state-desc" style="margin-top:12px">לא הוזנו נתונים רפואיים.</div>' : ''}
         </div>
-      </div>
-    `;
+        <div class="card" style="grid-column:1/-1">
+          <div class="card-header"><div class="card-title">מצב רפואי</div>${saveBtn}</div>
+          <div class="card-body">
+            <div class="form-row form-row-3">
+              <div class="form-group"><label class="form-label">מצב כללי</label>${txt('pm-general', h.generalStatus)}</div>
+              <div class="form-group"><label class="form-label">בדיקה רפואית אחרונה</label><input type="date" id="pm-checkup" class="form-control" value="${Utils.escHtml(h.lastCheckup || '')}" ${dis}></div>
+              <div class="form-group"><label class="form-label">רופא אחראי</label>${txt('pm-doctor', h.doctor)}</div>
+            </div>
+            <div class="form-row form-row-2">
+              <div class="form-group"><label class="form-label">מגבלות רפואיות</label><textarea id="pm-restr" class="form-control" rows="2" ${dis}>${Utils.escHtml(h.medicalRestrictions || '')}</textarea></div>
+              <div class="form-group"><label class="form-label">תרופות</label><textarea id="pm-meds" class="form-control" rows="2" ${dis}>${Utils.escHtml(h.medications || '')}</textarea></div>
+            </div>
+            <div class="form-group"><label class="form-label">הערות רפואיות (מפתיחת התיק)</label><textarea id="pm-notes" class="form-control" rows="2" ${dis}>${Utils.escHtml(file.medicalNotes || '')}</textarea></div>
+          </div>
+        </div>
+        <div class="card" style="grid-column:1/-1">
+          <div class="card-header"><div class="card-title">מסמכים רפואיים</div>
+            <div style="display:flex;gap:8px">
+              ${canEdit ? `<button class="btn btn-primary btn-sm" onclick="window.pfUploadMedicalDoc('${file.id}')">${Utils.icon('plus', 14)} העלאת מסמך רפואי</button>
+              <button class="btn btn-secondary btn-sm" onclick="window.pfUploadVsr('${file.id}')">העלאת וס״ר</button>` : ''}
+            </div></div>
+          <div class="card-body">
+            <div style="font-size:12px;color:var(--color-text-muted);margin-bottom:8px">${hasVsr ? 'וס״ר קיים במערכת עבור אדם זה ומוצג כאן ללא העלאה חוזרת.' : 'לא נמצא וס״ר במערכת עבור אדם זה.'}</div>
+            ${DocumentService.table(docs, { empty: 'לא הועלו מסמכים.', linkDeserter: true, removableModule: 'prisoner', canEdit })}
+          </div>
+        </div>
+      </div>`;
   }
+  window.savePrisonerMedical = (fid) => {
+    const f = Storage.getById(Storage.KEYS.PRISONER_FILES, fid); if (!f) return;
+    const v = id => (Utils.el(id) ? Utils.el(id).value : '');
+    f.health = Object.assign({}, f.health, {
+      bati: v('pm-bati').trim(), sensitivities: v('pm-sens').trim(), lifeSavingMeds: v('pm-lifesaving'),
+      generalStatus: v('pm-general').trim(), lastCheckup: v('pm-checkup'), doctor: v('pm-doctor').trim(),
+      medicalRestrictions: v('pm-restr').trim(), medications: v('pm-meds').trim(),
+    });
+    f.classification = Object.assign({}, f.classification, { profile: v('pm-profile').trim() });   // same field as מיון ושיבוץ
+    f.medicalNotes = v('pm-notes').trim();
+    f.updatedAt = new Date().toISOString(); Storage.upsert(Storage.KEYS.PRISONER_FILES, f);
+    Audit.log({ module: 'incarceration', action: 'update', entityType: 'prisonerFile', entityId: fid, description: 'עדכון פרטים רפואיים בתיק ' + (f.fileNumber || '') });
+    Toast.success('הפרטים הרפואיים נשמרו'); window._pfTab = 'medical'; Router.navigate('/prisoner-file', { id: fid });
+  };
+  function pfDocRefresh(fid) { window._pfTab = 'medical'; Router.navigate('/prisoner-file', { id: fid }); }
+  // medical upload: the warning comes BEFORE the upload dialog; it is informational (no digital signature check exists)
+  window.pfUploadMedicalDoc = async (fid) => {
+    const f = Storage.getById(Storage.KEYS.PRISONER_FILES, fid); if (!f) return;
+    const hasVsr = DocumentService.vsrFor(f.personId).length > 0;
+    const ok = await Modal.confirm({
+      title: 'אישור להעלאת מסמך רפואי',
+      message: 'העלאת מסמכים רפואיים מאושרת רק במידה והעצור חתם על וס״ר. ' + (hasVsr ? 'במערכת קיים מסמך וס״ר עבור אדם זה.' : 'לא נמצא מסמך וס״ר במערכת עבור אדם זה.'),
+      confirmLabel: 'אישור והמשך', cancelLabel: 'ביטול', type: 'warning',
+    });
+    if (!ok) return;
+    DocumentService.uploadModal({ personId: f.personId, sourceModule: 'prisoner', sourceRecordId: fid, types: ['medical'], title: 'העלאת מסמך רפואי', onDone: () => pfDocRefresh(fid) });
+  };
+  window.pfUploadVsr = (fid) => {
+    const f = Storage.getById(Storage.KEYS.PRISONER_FILES, fid); if (!f) return;
+    DocumentService.uploadModal({ personId: f.personId, sourceModule: 'prisoner', sourceRecordId: fid, types: ['vsr'], title: 'העלאת וס״ר', onDone: () => pfDocRefresh(fid) });
+  };
 
   function renderPrisonerVisits(file, esc, fd) {
     return card('ביקורים', addBtn(file.id, 'visits', 'רשום ביקור'),

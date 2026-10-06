@@ -79,6 +79,41 @@ window.Migrations = (function() {
         Storage.setCollection(K.STOCK_MOVEMENTS, ms);
       },
     },
+    {
+      // strict task classification: administrative subcategories are exactly דיווח/תיאום/נסיעה מנהלתית/תקלה.
+      // Only certain mappings are applied; everything else stays "לא סווג" (empty subcategory).
+      id: '2026-10-task-subcategories',
+      run() {
+        const K = Storage.KEYS;
+        const allowed = (cat, sub) => (TASK_SUBCATEGORIES[cat] || []).some(s => s.id === sub);
+        const tasks = Storage.getCollection(K.TASKS);
+        tasks.forEach(t => {
+          // earlier demo migration guessed the type alternately — the seed's own activityType is the reliable source
+          if (t.categorySource === 'demo-migration' && t.activityType) {
+            if (t.activityType === 'admin') { t.taskCategory = 'administrative'; t.taskSubcategory = ''; }
+            else if (allowed('operational', t.activityType)) { t.taskCategory = 'operational'; t.taskSubcategory = t.activityType; }
+            t.categorySource = 'activityType';
+          }
+          if (!t.taskSubcategory && t.taskType && allowed(t.taskCategory, t.taskType)) t.taskSubcategory = t.taskType;
+          if (t.taskSubcategory && !allowed(t.taskCategory, t.taskSubcategory)) t.taskSubcategory = '';   // incompatible -> unclassified
+          if (t.taskSubcategory === undefined) t.taskSubcategory = '';
+        });
+        Storage.setCollection(K.TASKS, tasks);
+
+        // Hamal manages administrative entries only
+        const h = Storage.getCollection(K.HAMAL_ENTRIES);
+        h.forEach(e => {
+          if (e.categorySource === 'demo-migration') {   // guessed alternately before — re-derive from the entry's own category
+            if (allowed('administrative', e.category)) e.entryKind = 'administrative';
+            else e.entryKind = 'unclassified';
+            e.categorySource = 'category';
+          }
+          if (e.entryKind === 'administrative' && allowed('administrative', e.category)) e.subcategory = e.category;
+          else if (e.subcategory === undefined) e.subcategory = '';
+        });
+        Storage.setCollection(K.HAMAL_ENTRIES, h);
+      },
+    },
   ];
 
   function runAll() {

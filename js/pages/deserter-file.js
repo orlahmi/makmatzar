@@ -56,6 +56,7 @@ Pages['deserter-file'] = function(query) {
             <button class="btn btn-success btn-sm" onclick="window.markDeserterReturned()">${Utils.icon('check', 14)} חזר ליחידה</button>
             <button class="btn btn-warning btn-sm" onclick="window.markDeserterLocated()">${Utils.icon('search', 14)} אותר</button>
           ` : ''}
+          ${canEdit && file.status === 'active' && person ? `<button class="btn btn-secondary btn-sm" onclick="Router.navigate('/new-prisoner-file', {personId:'${person.id}'})">פתח תיק כלוא</button>` : ''}
           <button class="btn btn-secondary btn-sm" onclick="window.print()">${Utils.icon('print', 14)} הדפסה</button>
           <button class="btn btn-ghost btn-sm" onclick="Router.navigate('/deserter-retrieval')">${Utils.icon('x', 14)} חזרה לאחזור</button>
         </div>
@@ -83,6 +84,7 @@ Pages['deserter-file'] = function(query) {
         <div class="tab-panel" data-tab="personal">${renderPersonal()}</div>
         <div class="tab-panel" data-tab="activities">${renderActivities()}</div>
         <div class="tab-panel" data-tab="treatment">${renderTreatment()}</div>
+        <div class="tab-panel" data-tab="documents">${renderDocuments()}</div>
         <div class="tab-panel" data-tab="surveillance">${renderSurveillance()}</div>
         <div class="tab-panel" data-tab="history">${renderHistory()}</div>
       </div>
@@ -99,6 +101,7 @@ Pages['deserter-file'] = function(query) {
       { id: 'personal', label: 'פרטים אישיים', icon: 'user' },
       { id: 'activities', label: 'פעילויות' },
       { id: 'treatment', label: 'טיפול' },
+      { id: 'documents', label: 'מסמכים' },
       { id: 'surveillance', label: 'מעקב בילוש' },
       { id: 'history', label: 'היסטוריה' },
     ],
@@ -223,6 +226,26 @@ Pages['deserter-file'] = function(query) {
         </div>
       </div>`;
   }
+
+  // documents are canonical records linked to the PERSON — the prisoner file of the same person shows them without re-upload
+  function renderDocuments() {
+    window._docRefresh = () => refresh('documents');
+    const docs = file.personId ? DocumentService.forPerson(file.personId) : [];
+    const hasVsr = docs.some(d => d.docType === 'vsr');
+    return `
+      <div class="card">
+        <div class="card-header"><div class="card-title">מסמכים</div>
+          ${canEdit ? `<button class="btn btn-primary btn-sm" onclick="window.deserterUploadDoc()">${Utils.icon('plus', 14)} העלאת מסמך</button>` : ''}</div>
+        <div class="card-body">
+          <div style="font-size:12px;color:var(--color-text-muted);margin-bottom:8px">${hasVsr ? 'וס״ר קיים. הוא יוצג אוטומטית גם בתיק הכלוא של אותו אדם — אין צורך להעלות אותו שוב.' : 'טרם הועלה וס״ר. וס״ר שיועלה כאן יהיה זמין אוטומטית בתיק הכלוא של אותו אדם.'}</div>
+          ${DocumentService.table(docs, { empty: 'לא הועלו מסמכים לאדם זה.', removableModule: 'deserter', canEdit })}
+        </div>
+      </div>`;
+  }
+  window.deserterUploadDoc = () => DocumentService.uploadModal({
+    personId: file.personId, sourceModule: 'deserter', sourceRecordId: fileId, types: ['vsr', 'other'], title: 'העלאת מסמך לתיק עריק',
+    onDone: () => refresh('documents'),
+  });
 
   function renderSurveillance() {
     const survFiles = Storage.getCollection(Storage.KEYS.SURVEILLANCE_ACTIVITIES).filter(s => s.deserterFileId === fileId || (s.deserters || []).some(d => d.deserterFileId === fileId));
