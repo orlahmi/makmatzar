@@ -1131,6 +1131,11 @@ Pages['mashlat'] = function(query) {
         description: 'הגעת חייל אושרה — ' + c.coordinationNumber, previousValue: c.status, newValue: 'arrived' });
       Toast.success('הגעת החייל אושרה');
       render();
+      // the natural next step: offer the prisoner opening right away (can still be done later from the row)
+      setTimeout(function() {
+        Modal.confirm({ title: 'המשך לפתיחת תיק כלוא', message: 'הגעת ' + name + ' אושרה. לפתוח עכשיו תיק כלוא? הנתונים מהתיאום יועברו אוטומטית.', confirmLabel: 'פתח תיק כלוא', cancelLabel: 'אחר כך', type: 'success' })
+          .then(function(go) { if (go) openIntakeModal(id); });
+      }, 80);
     });
   }
 

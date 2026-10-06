@@ -239,7 +239,7 @@ Pages['hamal-management'] = function(query) {
           <div class="form-group">
             <label class="form-label">עדיפות</label>
             <select class="form-control" id="hamal-priority">
-              ${PRIORITIES.map(p => `<option value="${p.id}">${Utils.escHtml(p.label)}</option>`).join('')}
+              ${PRIORITIES.map(p => `<option value="${p.id}" ${p.id === 'medium' ? 'selected' : ''}>${Utils.escHtml(p.label)}</option>`).join('')}
             </select>
           </div>
         </div>

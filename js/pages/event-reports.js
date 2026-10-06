@@ -195,7 +195,7 @@ Storage.getCollection(Storage.KEYS.PRISONER_FILES).forEach(pf => { const cur = p
           ${fld('ev-sender', 'מוסר הדו״ח', 'text', ex.senderName || (u ? u.firstName + ' ' + u.lastName : ''), true)}
           ${fld('ev-receiver', 'מקבל הדו״ח', 'text', ex.receiverName, true)}
           <div class="form-group"><label class="form-label">עדיפות</label>
-            <select id="ev-priority" class="form-control">${PRIORITIES.map(p => `<option value="${p.id}" ${(ex.priority || 'high') === p.id ? 'selected' : ''}>${Utils.escHtml(p.label)}</option>`).join('')}</select></div>
+            <select id="ev-priority" class="form-control">${PRIORITIES.map(p => `<option value="${p.id}" ${(ex.priority || 'medium') === p.id ? 'selected' : ''}>${Utils.escHtml(p.label)}</option>`).join('')}</select></div>
           ${fld('ev-date', 'תאריך האירוע', 'date', ex.eventDate || Utils.today(), true)}
           ${fld('ev-time', 'שעת האירוע', 'time', ex.eventTime, true)}
           ${fld('ev-location', 'מיקום האירוע', 'text', ex.location, true)}
