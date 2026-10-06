@@ -9,13 +9,14 @@ Pages['event-reports'] = function(query) {
 
   let filterStatus = '';   // '', 'open', 'closed'
   let filterSearch = '';
-  let selectedId = null;
+  let selectedId = (query && query.id) || null;   // deep link from a prisoner file
   const canEdit = Permissions.can('editPrisoner');
 
   const people = Storage.getCollection(Storage.KEYS.PEOPLE);
   const pMap = Object.fromEntries(people.map(p => [p.id, p]));
   const pfByPerson = {};
-  Storage.getCollection(Storage.KEYS.PRISONER_FILES).forEach(pf => { pfByPerson[pf.personId] = pf; });
+  // a person may have several files over time — link the active one when there is one
+Storage.getCollection(Storage.KEYS.PRISONER_FILES).forEach(pf => { const cur = pfByPerson[pf.personId]; if (!cur || (pf.status === 'active' && cur.status !== 'active')) pfByPerson[pf.personId] = pf; });
 
   // read-time normalisation of legacy records (idempotent; persisted only when a record is saved)
   function norm(ev) {
@@ -55,6 +56,12 @@ Pages['event-reports'] = function(query) {
     });
   }
 
+  // who was involved, at a glance: first two names and a +N for the rest
+  function partsCell(ev) {
+    const names = ev.participants.map(pid => pMap[pid] ? pMap[pid].firstName + ' ' + pMap[pid].lastName : '').filter(Boolean);
+    if (!names.length) return '—';
+    return Utils.escHtml(names.slice(0, 2).join(', ')) + (names.length > 2 ? ' <span class="badge badge-info" style="font-size:10px">+' + (names.length - 2) + '</span>' : '');
+  }
   const statusBadge = s => s === 'closed' ? '<span class="badge badge-closed">סגור</span>' : '<span class="badge badge-active">פתוח</span>';
 
   function renderPage() {
@@ -93,16 +100,17 @@ Pages['event-reports'] = function(query) {
         <div class="master-detail-layout" style="display:grid;grid-template-columns:${selected ? '1fr 1fr' : '1fr'};gap:var(--space-4)">
           <div class="table-panel">
             <table class="data-table dense">
-              <thead><tr><th>מס׳ סידורי</th><th>תאריך אירוע</th><th>שעה</th><th>תמצית האירוע</th><th>משתתפים</th><th>עדיפות</th><th>סטטוס</th><th></th></tr></thead>
+              <thead><tr><th>מס׳ סידורי</th><th>תאריך אירוע</th><th>שעה</th><th>תמצית האירוע</th><th>מיקום</th><th>משתתפים</th><th>עדיפות</th><th>סטטוס</th><th></th></tr></thead>
               <tbody>
-                ${data.length === 0 ? `<tr><td colspan="8" style="padding:32px;text-align:center;color:var(--color-text-muted)">לא נמצאו דוחות אירוע</td></tr>` :
+                ${data.length === 0 ? `<tr><td colspan="9" style="padding:32px;text-align:center;color:var(--color-text-muted)">לא נמצאו דוחות אירוע</td></tr>` :
                   data.map(ev => `
                     <tr class="${selected && selected.id === ev.id ? 'row-selected' : ''} ${ev.status === 'open' && (ev.priority === 'critical' || ev.priority === 'high') ? 'row-critical' : ''}" style="cursor:pointer" onclick="window.selectEvent('${ev.id}')">
                       <td class="td-number">${Utils.escHtml(String(ev.sequenceNumber || '—'))}</td>
                       <td class="td-date">${Utils.formatDate(ev.eventDate)}</td>
                       <td>${Utils.escHtml(ev.eventTime || '—')}</td>
                       <td>${Utils.escHtml(Utils.truncate(ev.title || '—', 34))}</td>
-                      <td>${ev.participants.length}</td>
+                      <td>${Utils.escHtml(ev.location || '—')}</td>
+                      <td title="${Utils.escHtml(ev.participants.map(pid => (pMap[pid] ? pMap[pid].firstName + ' ' + pMap[pid].lastName : '')).filter(Boolean).join(', '))}">${partsCell(ev)}</td>
                       <td>${StatusBadge.renderPriority(ev.priority || ev.severity)}</td>
                       <td>${statusBadge(ev.status)}</td>
                       <td>${canEdit && ev.status === 'open' ? `<button class="row-action-btn success" onclick="event.stopPropagation(); window.closeEvent('${ev.id}')" title="סגור אירוע">${Utils.icon('check', 12)}</button>` : ''}</td>

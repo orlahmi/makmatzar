@@ -357,7 +357,7 @@ window.Pages['gachlat'] = function(query) {
             ['חובה','קבע','מילואים'].map(function(v) { return '<option value="' + v + '"' + (f.serviceType === v ? ' selected' : '') + '>' + v + '</option>'; }).join('') +
           '</select>' +
           '<select id="gc-f-as" class="gc-filter form-control" style="height:32px;font-size:13px;min-width:130px;flex:1">' +
-            '<option value="">— סטטוס אבחון</option>' + statusOpts +
+            '<option value="">— סטטוס תהליך</option>' + statusOpts +
           '</select>' +
           '<button type="button" class="btn btn-secondary" id="gc-filter-clear" style="height:32px">נקה סינון</button>' +
         '</div>' +
@@ -392,8 +392,11 @@ window.Pages['gachlat'] = function(query) {
 
   /* ── TABLE ───────────────────────────────────────────────────────────────── */
   function buildTable(data) {
-    var cols = ['מ"א','שם','דרגה','יחידה','גיל','סוג שירות','סטטוס כלוא','עבירה','פרופיל','תאריך כניסה','ימי כליאה','סוג מועמדות','סטטוס אבחון','מאבחנת','מועד אבחון','פעולות'];
-    var hdr  = cols.map(function(c) { return '<th style="white-space:nowrap;padding:8px 10px;font-weight:600;font-size:12px">' + c + '</th>'; }).join('');
+    var cols = ['מ"א','שם','דרגה','יחידה','גיל','סוג שירות','סטטוס כלוא','עבירה','פרופיל','תאריך כניסה','ימי כליאה','סוג מועמדות','סטטוס תהליך','מאבחנת','מועד אבחון','פעולות'];
+    var hdr  = cols.map(function(c) {
+      var bg = c === 'סוג מועמדות' ? ';background:#2c5282' : (c === 'סטטוס תהליך' ? ';background:#276749' : '');
+      return '<th style="white-space:nowrap;padding:8px 10px;font-weight:600;font-size:12px' + bg + '">' + c + '</th>';
+    }).join('');
 
     var rows = '';
     if (!data.length) {
@@ -577,7 +580,7 @@ window.Pages['gachlat'] = function(query) {
           '<div style="font-size:11px;color:#888;margin-bottom:6px">קריטריונים שהתקיימו</div>' +
           '<ul style="margin:0;padding-right:18px;font-size:13px;color:#333">' + (reasons || '<li>—</li>') + '</ul>' +
         '</div>' +
-        '<div><div style="font-size:11px;color:#888;margin-bottom:6px">סטטוס אבחון נוכחי</div>' + SS.statusBadge(c.assessmentStatus) + '</div>' +
+        '<div><div style="font-size:11px;color:#888;margin-bottom:6px">סטטוס תהליך נוכחי</div>' + SS.statusBadge(c.assessmentStatus) + '</div>' +
       '</div>'
     );
   }
@@ -763,7 +766,7 @@ window.Pages['gachlat'] = function(query) {
     return (
       '<div>' +
         '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
-          '<div style="font-size:13px;font-weight:600;color:#1a3a5c">יומן מעקב</div>' +
+          '<div><div style="font-size:13px;font-weight:600;color:#1a3a5c">יומן מעקב</div><div class="section-hint" style="margin:2px 0 0">הערות מעקב מקצועיות שנרשמות ידנית על ידי הצוות</div></div>' +
           '<button type="button" class="btn btn-primary btn-sm" id="gc-add-followup" data-id="' + c.id + '">+ הוסף מעקב</button>' +
         '</div>' +
         rows +
@@ -823,7 +826,7 @@ window.Pages['gachlat'] = function(query) {
   function buildSecHistory(c) {
     var hist = (c.history || []).slice().reverse();
     if (!hist.length) return '<div style="color:#888;text-align:center;padding:40px 0">אין היסטוריה</div>';
-    return '<div>' + hist.map(function(h) {
+    return '<div><div class="section-hint">תיעוד אוטומטי של פעולות המערכת על המועמד — לקריאה בלבד</div>' + hist.map(function(h) {
       return '<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;border-bottom:1px solid #f0f0f0;font-size:13px">' +
         '<span>' + Utils.escHtml(h.label || h.action || '') + '</span>' +
         '<span style="color:#888;font-size:11px;white-space:nowrap;margin-right:8px">' + (h.at ? Utils.formatDate(h.at) : '') + '</span>' +
