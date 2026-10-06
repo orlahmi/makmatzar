@@ -76,6 +76,7 @@ Pages['deserter-file'] = function(query) {
         </div>
         <div class="person-summary-kpi">
           <div class="kpi-small"><div class="kpi-small-value">${days}</div><div class="kpi-small-label">ימי היעדרות</div></div>
+          <div class="kpi-small"><div class="kpi-small-value">${DocumentService.forPerson(person.id).length}</div><div class="kpi-small-label">מסמכים${DocumentService.vsrFor(person.id).length ? ' · וס״ר קיים' : ''}</div></div>
         </div>
       </div>` : ''}
 

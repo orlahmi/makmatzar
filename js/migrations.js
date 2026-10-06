@@ -82,17 +82,25 @@ window.Migrations = (function() {
     {
       // strict task classification: administrative subcategories are exactly דיווח/תיאום/נסיעה מנהלתית/תקלה.
       // Only certain mappings are applied; everything else stays "לא סווג" (empty subcategory).
-      id: '2026-10-task-subcategories',
+      id: '2026-10-task-subcategories-v2',
       run() {
         const K = Storage.KEYS;
         const allowed = (cat, sub) => (TASK_SUBCATEGORIES[cat] || []).some(s => s.id === sub);
+        // demo tasks: an earlier migration guessed the type alternately and the seed's activityType cycles regardless of the
+        // task name, so neither is reliable. Only tasks whose NAME makes the classification unambiguous are mapped;
+        // the others become "לא סווג" (empty type and subcategory).
+        const SEED_CLASS = {
+          t001: ['operational', 'patrol'], t002: ['operational', 'checkpoint'], t003: ['operational', 'security'],
+          t004: ['operational', 'escort'], t005: ['operational', 'arrest'], t006: ['operational', 'investigation'],
+          t007: ['operational', 'reinforcement'], t012: ['operational', 'checkpoint'], t014: ['administrative', 'coordination'],
+          t015: ['operational', 'patrol'],
+        };
         const tasks = Storage.getCollection(K.TASKS);
         tasks.forEach(t => {
-          // earlier demo migration guessed the type alternately — the seed's own activityType is the reliable source
-          if (t.categorySource === 'demo-migration' && t.activityType) {
-            if (t.activityType === 'admin') { t.taskCategory = 'administrative'; t.taskSubcategory = ''; }
-            else if (allowed('operational', t.activityType)) { t.taskCategory = 'operational'; t.taskSubcategory = t.activityType; }
-            t.categorySource = 'activityType';
+          if ((t.categorySource === 'demo-migration' || t.categorySource === 'activityType') && /^t\d{3}$/.test(t.id)) {
+            const c = SEED_CLASS[t.id];
+            t.taskCategory = c ? c[0] : ''; t.taskSubcategory = c ? c[1] : '';
+            t.categorySource = 'seed-name';
           }
           if (!t.taskSubcategory && t.taskType && allowed(t.taskCategory, t.taskType)) t.taskSubcategory = t.taskType;
           if (t.taskSubcategory && !allowed(t.taskCategory, t.taskSubcategory)) t.taskSubcategory = '';   // incompatible -> unclassified
