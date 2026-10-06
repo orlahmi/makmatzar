@@ -202,6 +202,18 @@ Pages['prisoner-file'] = function(query) {
               if (file.personId && DocumentService.vsrFor(file.personId).length) b.push('<span class="badge badge-info">וס״ר במערכת</span>');
               return b.length ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">' + b.join('') + '</div>' : '';
             })()}
+            ${(function() {
+              const K = Storage.KEYS; const chips = [];
+              const des = file.personId ? Storage.getCollection(K.DESERTER_FILES).find(d => d.personId === file.personId && d.status === 'active') : null;
+              if (des) chips.push(`<a class="link-chip" href="#/deserter-file?id=${des.id}">תיק ${(des.type || des.deserterType) === 'shirker' ? 'משתמט' : 'עריק'} פעיל</a>`);
+              const cand = Storage.getCollection(K.GACHLAT_CANDIDATES).find(c => c.prisonerFileId === file.id);
+              if (cand) chips.push(`<a class="link-chip" href="#/gachlat?id=${cand.id}">מועמד גחל"ת</a>`);
+              const coord = Storage.getCollection(K.MASHLAT_COORDINATIONS).find(c => c.prisonerFileId === file.id || c.id === file.coordinationId);
+              if (coord) chips.push(`<a class="link-chip" href="#/mashlat">תיאום משל"ט ${Utils.escHtml(coord.coordinationNumber || '')}</a>`);
+              const nEv = Storage.getCollection(K.EVENT_REPORTS).filter(e => e.prisonerFileId === file.id || (e.personId && e.personId === file.personId) || (e.participants || []).some(p => p === file.personId || (p && (p.personId === file.personId || p.prisonerFileId === file.id)))).length;
+              if (nEv) chips.push(`<a class="link-chip" href="javascript:void(0)" onclick="window._pfTab='incidents';Router.navigate('/prisoner-file',{id:'${file.id}'})">אירועים (${nEv})</a>`);
+              return chips.length ? '<div class="link-chips">' + chips.join('') + '</div>' : '';
+            })()}
           </div>
         </div>
 
@@ -412,28 +424,48 @@ Pages['prisoner-file'] = function(query) {
   }
 
   function renderPrisonerActivities(file, fd, esc) {
-    const acts = Storage.getCollection(Storage.KEYS.INMATE_ACTIVITIES).filter(a => a.prisonerFileId === file.id).slice(0, 10);
+    const person = Storage.getById(Storage.KEYS.PEOPLE, file.personId);
+    const mil = person ? person.militaryNumber : null;
+    // an activity may have several participants — match on the whole participant list, not only the first one
+    const acts = Storage.getCollection(Storage.KEYS.INMATE_ACTIVITIES).filter(a => a.prisonerFileId === file.id || (a.participants || []).indexOf(file.id) !== -1)
+      .sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))).slice(0, 10);
+    const permits = mil ? Storage.getCollection(Storage.KEYS.PASS_PERMITS).filter(p => (p.soldiers || []).some(x => x.id === mil))
+      .sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))).slice(0, 10) : [];
     return `
       <div class="card">
         <div class="card-header">
           <div class="card-title">פעילויות אחרונות</div>
-          <button class="btn btn-ghost btn-sm" onclick="Router.navigate('/inmate-activities')">כל הפעילויות</button>
+          <button class="btn btn-ghost btn-sm" onclick="Router.navigate('/inmate-activities')">יומן הפעילויות</button>
         </div>
         <div class="card-body">
-          ${acts.length === 0 ? '<div class="empty-state-desc">אין פעילויות מתועדות.</div>' : `
+          ${acts.length === 0 ? '<div class="empty-block"><div class="empty-title">אין פעילויות מתועדות לכלוא זה</div><div class="empty-hint">פעילות חדשה נוצרת ביומן הפעילויות ובוחרים בה את הכלוא.</div><button class="btn btn-secondary btn-sm" onclick="Router.navigate(\'/inmate-activities\')">לפתיחת יומן הפעילויות</button></div>' : `
             <table class="data-table">
-              <thead><tr><th>תאריך</th><th>שעה</th><th>סוג פעילות</th><th>מיקום</th><th>הערות</th></tr></thead>
+              <thead><tr><th>תאריך</th><th>שעה</th><th>סוג פעילות</th><th>מיקום</th><th>משתתפים</th><th>הערות</th><th></th></tr></thead>
               <tbody>
                 ${acts.map(a => `<tr>
                   <td>${fd(a.date)}</td>
-                  <td>${esc(a.time)}</td>
-                  <td>${esc(a.activityTypeLabel || (INMATE_ACTIVITY_TYPES||[]).find(t=>t.id===a.activityType)?.label || a.activityType)}</td>
+                  <td>${esc(a.time || a.plannedDeparture)}</td>
+                  <td>${esc(a.activityTypeLabel || (INMATE_ACTIVITY_TYPES||[]).find(t=>t.id===a.activityType)?.label)}</td>
                   <td>${esc(a.location)}</td>
-                  <td>${Utils.truncate(a.notes || '', 40)}</td>
+                  <td>${(a.participants || []).length > 1 ? (a.participants.length + ' משתתפים') : '—'}</td>
+                  <td>${Utils.escHtml(Utils.truncate(a.notes || '', 40)) || '—'}</td>
+                  <td><button class="btn btn-ghost btn-sm" onclick="Router.navigate('/inmate-activities', {date:'${a.date}'})">ביומן</button></td>
                 </tr>`).join('')}
               </tbody>
             </table>
           `}
+        </div>
+      </div>
+      <div style="height:12px"></div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">אישורי מעבר של הכלוא</div></div>
+        <div class="card-body">
+          ${permits.length === 0 ? '<div class="empty-block"><div class="empty-title">לא הופקו אישורי מעבר לכלוא זה</div><div class="empty-hint">אישור מעבר מופק מתוך פעילות ביומן הפעילויות.</div></div>' : `
+            <table class="data-table">
+              <thead><tr><th>מס׳ אישור</th><th>תאריך</th><th>לצורך</th><th>סוג אישור</th><th></th></tr></thead>
+              <tbody>${permits.map(p => `<tr><td class="td-number">${esc(p.permitNumber)}</td><td>${fd(p.date)}</td><td>${esc(p.purpose)}</td><td>${p.permitType === 'soldier' ? 'לחייל ספציפי' : 'לפעילות'}</td>
+                <td><button class="btn btn-secondary btn-sm" onclick="Router.navigate('/inmate-activities', {date:'${p.date}', permit:'${p.id}'})">צפייה / הדפסה</button></td></tr>`).join('')}</tbody>
+            </table>`}
         </div>
       </div>
     `;
@@ -456,6 +488,10 @@ Pages['prisoner-file'] = function(query) {
       ['date', 'תאריך', 'date', true, 'today'], ['interviewer', 'מראיין', 'text', true], ['subject', 'נושא', 'text', true], ['summary', 'סיכום', 'text', true]] },
     phoneCalls: { title: 'שיחת טלפון', list: 'phoneCalls', tab: 'phoneCalls', audit: 'הוספת שיחת טלפון', fields: [
       ['date', 'תאריך', 'date', true, 'today'], ['time', 'שעה', 'time', true], ['contact', 'איש קשר / מספר', 'text', true], ['duration', 'משך (דקות)', 'number', false]] },
+    disciplines: { title: 'רישום ענישה', list: 'disciplines', tab: 'disciplines', audit: 'רישום ענישה', fields: [
+      ['date', 'תאריך', 'date', true, 'today'], ['offense', 'עבירה', 'text', true], ['punishment', 'ענישה', 'text', true], ['approver', 'מאשר', 'text', false]] },
+    appeals: { title: 'רישום ערעור / עתירה', list: 'appeals', tab: 'appeals', audit: 'רישום ערעור', fields: [
+      ['date', 'תאריך', 'date', true, 'today'], ['subject', 'נושא', 'text', true], ['result', 'תוצאה', 'text', false]] },
     depositBags: { title: 'שקית פקדון חדשה', list: 'depositBags', tab: 'deposits', audit: 'הוספת שקית פקדון', fields: [
       ['number', 'מספר שקית', 'text', true], ['status', 'סטטוס שקית', 'select', true, ['פעיל', 'נמסר']], ['receiver', 'מקבל', 'text', true],
       ['date', 'תאריך', 'date', true, 'today'], ['time', 'שעה', 'time', true], ['notes', 'הערות לשקית', 'text', false]] },
@@ -523,7 +559,7 @@ Pages['prisoner-file'] = function(query) {
   function delBtn(fid, list, id) { return canEdit ? `<button class="row-action-btn danger" title="מחיקה" onclick="window.pfDelRecord('${fid}','${list}','${id}')">${Utils.icon('trash', 13)}</button>` : ''; }
   function simpleTable(file, list, head, rowFn, empty, esc) {
     const arr = file[list] || [];
-    return arr.length === 0 ? `<div class="empty-state-desc">${empty}</div>` : `<table class="data-table"><thead><tr>${head.map(h => `<th>${h}</th>`).join('')}<th></th></tr></thead><tbody>${arr.map(r => `<tr>${rowFn(r).map(c => `<td>${c}</td>`).join('')}<td>${r.id ? delBtn(file.id, list, r.id) : ''}</td></tr>`).join('')}</tbody></table>`;
+    return arr.length === 0 ? `<div class="empty-block"><div class="empty-title">${empty}</div>${canEdit ? '<div class="empty-hint">ניתן להוסיף רשומה באמצעות הכפתור שבראש הכרטיס.</div>' : ''}</div>` : `<table class="data-table"><thead><tr>${head.map(h => `<th>${h}</th>`).join('')}<th></th></tr></thead><tbody>${arr.map(r => `<tr>${rowFn(r).map(c => `<td>${c}</td>`).join('')}<td>${r.id ? delBtn(file.id, list, r.id) : ''}</td></tr>`).join('')}</tbody></table>`;
   }
   function card(title, actions, body) { return `<div class="card"><div class="card-header"><div class="card-title">${title}</div>${actions}</div><div class="card-body">${body}</div></div>`; }
 
@@ -620,22 +656,8 @@ Pages['prisoner-file'] = function(query) {
       simpleTable(file, 'visits', ['תאריך', 'שעה', 'מבקר', 'קשר', 'משך (דק׳)', 'הערות'], r => [fd(r.date), esc(r.time), esc(r.visitorName), esc(r.relation), esc(r.duration), esc(r.notes)], 'אין ביקורים מתועדים.', esc));
   }
   function renderPrisonerDisciplines(file, esc, fd) {
-    const disc = file.disciplines || [];
-    return `
-      <div class="card">
-        <div class="card-header"><div class="card-title">ענישה משמעתית</div></div>
-        <div class="card-body">
-          ${disc.length === 0 ? '<div class="empty-state-desc">אין רשומות ענישה.</div>' : `
-            <table class="data-table">
-              <thead><tr><th>תאריך</th><th>עבירה</th><th>ענישה</th><th>מאשר</th></tr></thead>
-              <tbody>
-                ${disc.map(d => `<tr><td>${fd(d.date)}</td><td>${esc(d.offense)}</td><td>${esc(d.punishment)}</td><td>${esc(d.approver)}</td></tr>`).join('')}
-              </tbody>
-            </table>
-          `}
-        </div>
-      </div>
-    `;
+    return card('ענישה משמעתית', addBtn(file.id, 'disciplines', 'רשום ענישה'),
+      simpleTable(file, 'disciplines', ['תאריך', 'עבירה', 'ענישה', 'מאשר'], d => [fd(d.date), esc(d.offense), esc(d.punishment), esc(d.approver)], 'אין רשומות ענישה.', esc));
   }
 
   function renderPrisonerBehavior(file, esc, fd) {
@@ -660,60 +682,44 @@ Pages['prisoner-file'] = function(query) {
     `;
   }
 
+  const BLOCK_FORMS = {
+    workAssignment: { title: 'עדכון שיבוץ עבודה', tab: 'work', audit: 'עדכון שיבוץ עבודה', fields: [['role', 'תפקיד', 'text', false], ['unit', 'יחידת עבודה', 'text', false], ['hours', 'שעות יום', 'text', false], ['supervisor', 'מפקד ישיר', 'text', false], ['startDate', 'תחילת שיבוץ', 'date', false]] },
+    education: { title: 'עדכון לימודים ושיקום', tab: 'education', audit: 'עדכון לימודים ושיקום', fields: [['program', 'תכנית לימודים', 'text', false], ['institution', 'מוסד', 'text', false], ['status', 'סטטוס', 'text', false], ['notes', 'הערות', 'text', false]] },
+  };
+  window.pfEditBlock = (fid, key) => {
+    const cfg = BLOCK_FORMS[key]; const f = Storage.getById(Storage.KEYS.PRISONER_FILES, fid); const cur = f[key] || {};
+    Modal.open({ title: cfg.title, body: `<div class="form-row form-row-2">${cfg.fields.map(fl => fieldHtml('eb-' + fl[0], fl, cur[fl[0]] || '')).join('')}</div>`,
+      footer: '<button class="btn btn-secondary" onclick="Modal.close()">ביטול</button><button class="btn btn-primary" id="eb-save">שמור</button>' });
+    Utils.el('eb-save').onclick = () => {
+      const rec = Object.assign({}, cur); cfg.fields.forEach(fl => { rec[fl[0]] = Utils.el('eb-' + fl[0]).value.trim(); });
+      f[key] = rec; f.updatedAt = new Date().toISOString(); Storage.upsert(Storage.KEYS.PRISONER_FILES, f);
+      Audit.log({ module: 'incarceration', action: 'update', entityType: 'prisonerFile', entityId: fid, description: cfg.audit + ' — תיק ' + (f.fileNumber || f.id) });
+      Modal.close(); Toast.success('נשמר'); window._pfTab = cfg.tab; Router.navigate('/prisoner-file', { id: fid });
+    };
+  };
+  function editBtn(fid, key) { return canEdit ? `<button class="btn btn-secondary btn-sm" onclick="window.pfEditBlock('${fid}','${key}')">${Utils.icon('edit', 14)} עדכון</button>` : ''; }
   function renderPrisonerWork(file, esc, fd) {
     const w = file.workAssignment || {};
-    return `
-      <div class="card">
-        <div class="card-header"><div class="card-title">שיבוץ עבודה</div></div>
-        <div class="card-body">
-          <div class="info-list">
-            ${infoRow('תפקיד', esc(w.role))}
-            ${infoRow('יחידת עבודה', esc(w.unit))}
-            ${infoRow('שעות יום', esc(w.hours))}
-            ${infoRow('מפקד ישיר', esc(w.supervisor))}
-            ${infoRow('תחילת שיבוץ', fd(w.startDate))}
-          </div>
-          ${!w.role ? '<div class="empty-state-desc" style="margin-top:12px">לא הוגדר שיבוץ עבודה.</div>' : ''}
-        </div>
+    return card('שיבוץ עבודה', editBtn(file.id, 'workAssignment'), `
+      <div class="info-list">
+        ${infoRow('תפקיד', esc(w.role))}${infoRow('יחידת עבודה', esc(w.unit))}${infoRow('שעות יום', esc(w.hours))}${infoRow('מפקד ישיר', esc(w.supervisor))}${infoRow('תחילת שיבוץ', fd(w.startDate))}
       </div>
-    `;
+      ${!w.role ? '<div class="empty-block"><div class="empty-title">לא הוגדר שיבוץ עבודה</div>' + (canEdit ? '<div class="empty-hint">לחץ על "עדכון" כדי להזין שיבוץ.</div>' : '') + '</div>' : ''}`);
   }
 
   function renderPrisonerEducation(file, esc, fd) {
     const edu = file.education || {};
-    return `
-      <div class="card">
-        <div class="card-header"><div class="card-title">לימודים ושיקום</div></div>
-        <div class="card-body">
-          <div class="info-list">
-            ${infoRow('תכנית לימודים', esc(edu.program))}
-            ${infoRow('מוסד', esc(edu.institution))}
-            ${infoRow('סטטוס', esc(edu.status))}
-            ${infoRow('הערות', esc(edu.notes))}
-          </div>
-          ${!edu.program ? '<div class="empty-state-desc" style="margin-top:12px">לא הוגדרו לימודים.</div>' : ''}
-        </div>
+    return card('לימודים ושיקום', editBtn(file.id, 'education'), `
+      <div class="info-list">
+        ${infoRow('תכנית לימודים', esc(edu.program))}${infoRow('מוסד', esc(edu.institution))}${infoRow('סטטוס', esc(edu.status))}${infoRow('הערות', esc(edu.notes))}
       </div>
-    `;
+      ${!edu.program ? '<div class="empty-block"><div class="empty-title">לא הוגדרו לימודים</div>' + (canEdit ? '<div class="empty-hint">לחץ על "עדכון" כדי להזין תכנית לימודים.</div>' : '') + '</div>' : ''}`);
   }
 
   function renderPrisonerAppeals(file, esc, fd) {
-    const appeals = file.appeals || [];
-    return `
-      <div class="card">
-        <div class="card-header"><div class="card-title">ערעורים ועתירות</div></div>
-        <div class="card-body">
-          ${appeals.length === 0 ? '<div class="empty-state-desc">אין ערעורים מתועדים.</div>' : `
-            <table class="data-table">
-              <thead><tr><th>תאריך</th><th>נושא</th><th>תוצאה</th></tr></thead>
-              <tbody>
-                ${appeals.map(a => `<tr><td>${fd(a.date)}</td><td>${esc(a.subject)}</td><td>${StatusBadge.render(a.result)}</td></tr>`).join('')}
-              </tbody>
-            </table>
-          `}
-        </div>
-      </div>
-    `;
+    const res = v => (v && /^[a-z_]+$/i.test(String(v))) ? StatusBadge.render(v) : esc(v);
+    return card('ערעורים ועתירות', addBtn(file.id, 'appeals', 'רשום ערעור'),
+      simpleTable(file, 'appeals', ['תאריך', 'נושא', 'תוצאה'], a => [fd(a.date), esc(a.subject), res(a.result)], 'אין ערעורים מתועדים.', esc));
   }
 
   function renderPrisonerDeposits(file, esc, fd) {
@@ -1023,7 +1029,7 @@ Pages['prisoner-file'] = function(query) {
         <div class="card-body">
           ${evs.length === 0 ? '<div class="empty-state-desc">אין דוחות אירוע מקושרים לכלוא זה.</div>' : `
           <table class="data-table"><thead><tr><th>מס׳ סידורי</th><th>תאריך</th><th>שעה</th><th>כותרת</th><th>מיקום</th><th>סטטוס</th></tr></thead><tbody>
-            ${evs.map(e => `<tr style="cursor:pointer" onclick="Router.navigate('/event-reports')"><td>${esc(String(e.sequenceNumber))}</td><td>${fd(e.eventDate)}</td><td>${esc(e.eventTime)}</td><td>${esc(e.title)}</td><td>${esc(e.location)}</td><td>${(Utils.isEventOpen(e) ? '<span class="badge badge-active">פתוח</span>' : '<span class="badge badge-closed">סגור</span>')}</td></tr>`).join('')}
+            ${evs.map(e => `<tr style="cursor:pointer" onclick="Router.navigate('/event-reports', {id:'${e.id}'})"><td>${esc(String(e.sequenceNumber))}</td><td>${fd(e.eventDate)}</td><td>${esc(e.eventTime)}</td><td>${esc(e.title)}</td><td>${esc(e.location)}</td><td>${(Utils.isEventOpen(e) ? '<span class="badge badge-active">פתוח</span>' : '<span class="badge badge-closed">סגור</span>')}</td></tr>`).join('')}
           </tbody></table>`}
         </div>
       </div>`;

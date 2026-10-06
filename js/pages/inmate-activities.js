@@ -11,6 +11,8 @@ Pages['inmate-activities'] = function(query) {
   let viewDate = new Date();
   let selectedDate = today;
   const canEdit = Permissions.can('editPrisoner');
+  // deep links from other modules: ?date=YYYY-MM-DD (and optionally ?permit=<id> to open that permit)
+  if (query && /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(query.date || '')) { selectedDate = query.date; viewDate = new Date(query.date + 'T00:00:00'); }
 
   let filterCompany = '';
   let filterType = '';
@@ -33,7 +35,7 @@ Pages['inmate-activities'] = function(query) {
       const parts = getParticipants(a);
       const inCompany = parts.some(pfid => {
         const pf = pfMap[pfid];
-        return pf && pf.company === filterCompany;
+        return pf && (pf.detentionCompany || pf.company) === filterCompany;
       });
       if (!inCompany) return false;
     }
@@ -81,7 +83,14 @@ Pages['inmate-activities'] = function(query) {
         location: r.location || '',
         supervisor: '',
         notes: r.notes || '',
+        recurrenceText: recurrenceText(r),
       }));
+  }
+  // readable recurrence summary, e.g. "כל א׳ · ג׳ — עד 31.12.2026"
+  function recurrenceText(r) {
+    const names = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳'];
+    const days = (r.daysOfWeek || []).slice().sort().map(d => names[d]).join(' · ');
+    return 'כל ' + (days || '—') + (r.endDate ? ' — עד ' + Utils.formatDate(r.endDate) : ' — ללא תאריך סיום');
   }
 
   function renderPage() {
@@ -201,12 +210,14 @@ Pages['inmate-activities'] = function(query) {
                       <div style="display:flex;justify-content:space-between;margin-bottom:4px">
                         <strong>${Utils.escHtml(plannedOf(a) || '—')}</strong>
                         <span>
-                          ${a.isRecurring ? `<span class="badge badge-purple" title="פעילות קבועה">${Utils.icon('refresh', 10)} קבועה</span>` : ''}
+                          ${a.isRecurring ? `<span class="badge badge-purple" title="${Utils.escHtml(a.recurrenceText || 'פעילות קבועה')}">${Utils.icon('refresh', 10)} קבועה</span>` : ''}
                           <span class="badge badge-info">${Utils.escHtml(typeLabel(a))}</span>
                         </span>
                       </div>
                       <div style="font-size:var(--font-size-sm)">${Utils.escHtml(participantNames(a))}</div>
-                      <div style="font-size:var(--font-size-xs);color:var(--color-text-muted)">${Utils.escHtml(a.location || '')} ${a.notes ? '• ' + Utils.truncate(a.notes, 40) : ''}</div>
+                      <div style="font-size:var(--font-size-xs);color:var(--color-text-muted)">${Utils.escHtml(a.location || '')} ${a.notes ? '• ' + Utils.escHtml(Utils.truncate(a.notes, 40)) : ''}</div>
+                      ${a.isRecurring ? `<div style="font-size:11px;color:var(--color-text-muted)">${Utils.escHtml(a.recurrenceText || '')}</div>` : ''}
+                      <div style="margin-top:6px"><button class="btn btn-secondary btn-sm" onclick="window._permitFor('${a.id}')">${Utils.icon('report', 12)} אישור מעבר לפעילות</button></div>
                     </div>
                   `;
                 }).join('')
@@ -239,7 +250,7 @@ Pages['inmate-activities'] = function(query) {
                         <td>${Utils.escHtml(a.actualDeparture || '—')}</td>
                         <td>${Utils.escHtml(a.plannedReturn || a.returnTime || '—')}</td>
                         <td>${Utils.escHtml(a.actualReturn || '—')}</td>
-                        <td>${i === 0 && canEdit && !a.isRecurring ? `<button class="row-action-btn" title="עריכה" onclick="window.editActivity('${a.id}')">${Utils.icon('edit', 12)}</button><button class="row-action-btn danger" title="מחיקה" onclick="window.deleteActivity('${a.id}')">${Utils.icon('trash', 12)}</button>` : ''}</td>
+                        <td>${i === 0 && canEdit && !a.isRecurring ? `<button class="row-action-btn" title="עריכה" onclick="window.editActivity('${a.id}')">${Utils.icon('edit', 12)}</button><button class="row-action-btn danger" title="מחיקה" onclick="window.deleteActivity('${a.id}')">${Utils.icon('trash', 12)}</button>` : ''}${pfid ? `<button class="row-action-btn" title="אישור מעבר אישי" onclick="window._permitFor('${a.id}','${pfid}')">${Utils.icon('report', 12)}</button>` : ''}</td>
                       </tr>`;
                     }).join('');
                   }).join('')}
@@ -271,6 +282,7 @@ Pages['inmate-activities'] = function(query) {
     Utils.el('btn-recurring').onclick = () => showRecurringManagerModal();
     Utils.el('btn-permit').onclick = () => openPermitModal();
     Utils.el('btn-today').onclick = () => { viewDate = new Date(); selectedDate = today; renderPage(); };
+    window._permitFor = (actId, pfid) => openPermitModal({ activityId: actId, pfid });
     window.editActivity = (id) => { const act = Storage.getById(Storage.KEYS.INMATE_ACTIVITIES, id); if (act) showAddActivityModal(act); };
 
     window.deleteActivity = async (id) => {
@@ -556,7 +568,7 @@ Pages['inmate-activities'] = function(query) {
     return String(Math.max(100000, ...nums) + 1);
   }
 
-  function openPermitModal() {
+  function openPermitModal(pre) {
     const date = selectedDate; const rows = permitRows(date);
     if (!rows.length) { Toast.error('אין רשומות ביום שנבחר להפקת אישורי מעבר'); return; }
     const groups = groupByType(rows); const types = Object.keys(groups).sort();
@@ -595,6 +607,11 @@ Pages['inmate-activities'] = function(query) {
     ['pm-soldier', 'pm-exceptional', 'pm-copies'].forEach(id => { $(id).onchange = refresh; $(id).oninput = refresh; });
     $('pm-activity').onchange = () => { $('pm-detail').style.display = 'none'; $('pm-detail-btn').textContent = 'פירוט כלואים'; refresh(); };
     $('pm-detail-btn').onclick = () => { const d = $('pm-detail'); const show = d.style.display === 'none'; if (show) detail(); d.style.display = show ? '' : 'none'; $('pm-detail-btn').textContent = show ? 'הסתר פירוט' : 'פירוט כלואים'; };
+    // opened from an activity / a participant row: preselect it so the operator only confirms
+    if (pre && pre.activityId) {
+      if (pre.pfid) { const i = rows.findIndex(r => r.key === pre.activityId + '|' + pre.pfid); if (i >= 0) $('pm-soldier').value = String(i); }
+      else { const r0 = rows.find(r => r.activityId === pre.activityId); if (r0) { document.querySelector('input[name=permitType][value=activity]').checked = true; $('pm-activity').value = r0.type; } }
+    }
     refresh();
 
     $('pm-generate').onclick = () => {
@@ -670,4 +687,5 @@ Pages['inmate-activities'] = function(query) {
   };
 
   renderPage();
+  if (query && query.permit && Storage.getById(Storage.KEYS.PASS_PERMITS, query.permit)) showPermitPreview(query.permit);
 };

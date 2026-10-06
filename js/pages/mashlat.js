@@ -893,6 +893,7 @@ Pages['mashlat'] = function(query) {
       var found = people.find(function(pp) { return pp.militaryNumber === q || pp.nationalId === q; });
       if (!found) {
         /* Manual entry — still update external sections with null person */
+        Utils.markAuto(['mc-first', 'mc-last'], false);
         updatePostLookupSections(null, null);
         Toast.warning('לא נמצא חייל עם מספר זה — ניתן להזין ידנית');
         return;
@@ -918,6 +919,7 @@ Pages['mashlat'] = function(query) {
       var lastEl  = Utils.el('mc-last');  if (lastEl)  { lastEl.value  = person.lastName;  lastEl.removeAttribute('readonly');  lastEl.setAttribute('readonly', ''); }
       Utils.el('mc-rank-val').value    = person.rank || '';
       Utils.el('mc-service-val').value = person.serviceType || '';
+      Utils.markAuto(['mc-first', 'mc-last'], true);
       Toast.show('נטען: ' + person.firstName + ' ' + person.lastName, 'success');
       var destEl = Utils.el('mc-dest');
       updatePostLookupSections(person.id, destEl ? destEl.value : null);
@@ -1129,6 +1131,11 @@ Pages['mashlat'] = function(query) {
         description: 'הגעת חייל אושרה — ' + c.coordinationNumber, previousValue: c.status, newValue: 'arrived' });
       Toast.success('הגעת החייל אושרה');
       render();
+      // the natural next step: offer the prisoner opening right away (can still be done later from the row)
+      setTimeout(function() {
+        Modal.confirm({ title: 'המשך לפתיחת תיק כלוא', message: 'הגעת ' + name + ' אושרה. לפתוח עכשיו תיק כלוא? הנתונים מהתיאום יועברו אוטומטית.', confirmLabel: 'פתח תיק כלוא', cancelLabel: 'אחר כך', type: 'success' })
+          .then(function(go) { if (go) openIntakeModal(id); });
+      }, 80);
     });
   }
 

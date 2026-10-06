@@ -107,7 +107,7 @@ Pages['new-deserter-file'] = function(query) {
 
   function showDup(existing) {
     const box = $('nd-dup');
-    box.innerHTML = `לאדם זה כבר קיים תיק עריק פעיל (${Utils.escHtml(existing.fileNumber || (function(dg) { return dg ? 'ED-' + dg.slice(-6).padStart(6, '0') : existing.id; })(String(existing.id).replace(/[^0-9]/g, '')))}). לא ניתן לפתוח תיק נוסף. <button type="button" class="btn btn-secondary btn-sm" id="nd-open-existing">פתח את התיק הקיים</button>`;
+    box.innerHTML = `לאדם זה כבר קיים תיק עריק פעיל (${existing.fileNumber ? Utils.escHtml(existing.fileNumber) : 'תיק ישן'}). לא ניתן לפתוח תיק נוסף. <button type="button" class="btn btn-secondary btn-sm" id="nd-open-existing">פתח את התיק הקיים</button>`;
     box.style.display = 'block';
     $('nd-open-existing').onclick = () => Router.navigate('/deserter-file', { id: existing.id });
   }
@@ -117,12 +117,22 @@ Pages['new-deserter-file'] = function(query) {
     const mil = $('nd-mil').value.trim();
     person = people.find(p => p.militaryNumber === mil) || null;
     $('nd-dup').style.display = 'none';
-    ['nd-first', 'nd-last', 'nd-nid', 'nd-birth', 'nd-gender', 'nd-rank', 'nd-unit', 'nd-phone'].forEach(i => { $(i).value = ''; });
+    ['nd-first', 'nd-last', 'nd-nid', 'nd-birth', 'nd-gender', 'nd-rank', 'nd-unit', 'nd-phone'].forEach(i => { $(i).value = ''; Utils.markAuto(i, false); });
     if (!person) { Toast.error('לא נמצא אדם עם מספר אישי זה במאגר'); return; }
     $('nd-first').value = person.firstName; $('nd-last').value = person.lastName; $('nd-nid').value = person.nationalId || '';
     $('nd-birth').value = person.birthDate ? Utils.formatDate(person.birthDate) : ''; $('nd-gender').value = GENDER[person.gender] || '';
     $('nd-rank').value = (RANK_MAP[person.rank] || {}).label || ''; $('nd-unit').value = (DEMO_UNITS.find(u => u.id === person.unitId) || {}).name || ''; $('nd-phone').value = person.phone || '';
+    ['nd-first', 'nd-last', 'nd-nid', 'nd-birth', 'nd-gender', 'nd-rank', 'nd-unit', 'nd-phone'].forEach(i => Utils.markAuto(i, !!$(i).value));
     const ex = activeFor(person.id); if (ex) showDup(ex); else Toast.success('פרטי האדם נטענו');
+    // what the system already knows about this person (linked, not copied)
+    let box = $('nd-linked');
+    if (!box) { box = document.createElement('div'); box.id = 'nd-linked'; box.className = 'info-box'; box.style.cssText = 'margin:8px 0;font-size:13px'; $('nd-dup').insertAdjacentElement('afterend', box); }
+    const pf = Storage.getCollection(Storage.KEYS.PRISONER_FILES).find(f => f.personId === person.id && f.status === 'active');
+    const vsr = DocumentService.vsrFor(person.id);
+    const parts = [];
+    if (pf) parts.push('לאדם זה קיים תיק כלוא פעיל (<a href="#/prisoner-file?id=' + pf.id + '">פתיחת התיק</a>)');
+    if (vsr.length) parts.push('וס״ר קיים במערכת (מקור: ' + Utils.escHtml(DocumentService.sourceInfo(vsr[0]).label) + ')');
+    box.innerHTML = parts.join('<br>'); box.style.display = parts.length ? 'block' : 'none';
   };
 
   $('nd-save').onclick = () => {

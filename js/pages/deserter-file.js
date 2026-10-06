@@ -12,7 +12,9 @@ Pages['deserter-file'] = function(query) {
   if (!file) { content.innerHTML = EmptyState.notFound(fileId); return; }
 
   // backward-compatible defaults (idempotent, in-memory until the user saves something)
-  if (!file.fileNumber) { const dg = String(file.id || '').replace(/\D/g, ''); file.fileNumber = dg ? 'ED-' + dg.slice(-6).padStart(6, '0') : String(file.id); }
+  // legacy files carry no file number: never invent one — show them as an old file
+  const fileNoLabel = file.fileNumber ? ' — ' + file.fileNumber : ' (תיק ישן)';
+  const fileNoAudit = file.fileNumber || file.id;
   file.addresses = file.addresses || [];
   file.pastDesertions = file.pastDesertions || [];
   file.activities = file.activities || [];
@@ -40,7 +42,7 @@ Pages['deserter-file'] = function(query) {
   function save(auditText) {
     file.updatedAt = new Date().toISOString();
     Storage.upsert(Storage.KEYS.DESERTER_FILES, file);
-    if (auditText) Audit.log({ module: 'investigation', action: 'update', entityType: 'deserterFile', entityId: fileId, description: `${auditText} — תיק ${file.fileNumber}` });
+    if (auditText) Audit.log({ module: 'investigation', action: 'update', entityType: 'deserterFile', entityId: fileId, description: `${auditText} — תיק ${fileNoAudit}` });
   }
   function refresh(tab) { Router.navigate('/deserter-file', { id: fileId }); if (tab) window._deserterTab = tab; }
 
@@ -48,8 +50,8 @@ Pages['deserter-file'] = function(query) {
     <div class="page-wrapper">
       <div class="page-header">
         <div class="page-header-left">
-          <h1 class="page-title">${Utils.icon('deserter', 22)} תיק ${kind} — ${esc(file.fileNumber)}</h1>
-          <p class="page-subtitle">${StatusBadge.render(file.status)} &nbsp; ${base ? esc(base.shortName) + ' • ' : ''}עריק מתאריך: ${fd(file.startDate)}</p>
+          <h1 class="page-title">${Utils.icon('deserter', 22)} תיק ${kind}${Utils.escHtml(fileNoLabel)}</h1>
+          <p class="page-subtitle">${StatusBadge.render(file.status)} &nbsp; ${base ? esc(base.shortName) + ' • ' : ''}${kind} מתאריך: ${fd(file.startDate)}</p>
         </div>
         <div class="page-header-actions">
           ${canEdit && file.status === 'active' ? `
@@ -73,6 +75,15 @@ Pages['deserter-file'] = function(query) {
             <span>ת"ז: ${esc(person.nationalId)}</span>
             <span>${esc(person.phone)}</span>
           </div>
+          ${(function() {
+            const chips = [];
+            const pf = Storage.getCollection(Storage.KEYS.PRISONER_FILES).find(p => p.personId === person.id && p.status === 'active');
+            if (pf) chips.push(`<a class="link-chip" href="#/prisoner-file?id=${pf.id}">תיק כלוא פעיל ${Utils.escHtml(pf.fileNumber || '')}</a>`);
+            const nVsr = DocumentService.vsrFor(person.id).length;
+            chips.push(nVsr ? `<a class="link-chip" href="javascript:void(0)" onclick="window._deserterTab='documents';Router.navigate('/deserter-file',{id:'${fileId}'})">וס״ר קיים (${nVsr})</a>` : '<span class="badge badge-draft">טרם הועלה וס״ר</span>');
+            if (file.arrest && (file.arrest.date || file.arrest.policeStation || file.arrest.approver)) chips.push('<span class="badge badge-warning">נתוני מעצר הוזנו</span>');
+            return '<div class="link-chips">' + chips.join('') + '</div>';
+          })()}
         </div>
         <div class="person-summary-kpi">
           <div class="kpi-small"><div class="kpi-small-value">${days}</div><div class="kpi-small-label">ימי היעדרות</div></div>
@@ -290,7 +301,7 @@ Pages['deserter-file'] = function(query) {
     const ok = await Modal.confirm({ title: 'חזר ליחידה', message: 'האם לסמן כ"חזר ליחידה"?', type: 'success' });
     if (!ok) return;
     file.status = 'returned'; file.endDate = Utils.today();
-    save(); Audit.log({ module: 'investigation', action: 'close', entityType: 'deserterFile', entityId: fileId, description: `תיק ${file.fileNumber}: חזר ליחידה` });
+    save(); Audit.log({ module: 'investigation', action: 'close', entityType: 'deserterFile', entityId: fileId, description: `תיק ${fileNoAudit}: חזר ליחידה` });
     Toast.success('התיק עודכן — חזר ליחידה'); setTimeout(() => stay('treatment'), 300);
   };
   window.markDeserterLocated = async () => {

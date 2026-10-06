@@ -505,7 +505,8 @@ Pages['new-report-full'] = function(query) {
     if (!milNum) { Toast.warning('הכנס מספר אישי לחיפוש'); return; }
     const person = Storage.getCollection(Storage.KEYS.PEOPLE).find(p => p.militaryNumber === milNum);
     if (!person) { Toast.info('לא נמצא אדם עם מספר אישי זה — יש להזין את הפרטים ידנית'); return; }
-    const set = (name, v) => { if (form[name] && v) { form[name].value = v; Validation.clearFieldError(form[name]); } };
+    const set = (name, v) => { if (form[name] && v) { form[name].value = v; Validation.clearFieldError(form[name]); Utils.markAuto(form[name], true); } };
+    ['nationalId', 'firstName', 'lastName', 'phone', 'rank', 'serviceType', 'unitPerson', 'corps', 'street', 'houseNumber', 'city'].forEach(n => { if (form[n]) Utils.markAuto(form[n], false); });
     set('nationalId', person.nationalId);
     set('firstName', person.firstName);
     set('lastName', person.lastName);

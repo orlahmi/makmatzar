@@ -23,7 +23,8 @@ window.DocumentService = (function() {
   function sourceInfo(d) {
     const label = SOURCES[d.sourceModule] || '—';
     let rec = '';
-    if (d.sourceModule === 'deserter') { const f = Storage.getById(Storage.KEYS.DESERTER_FILES, d.sourceRecordId); rec = f ? (f.fileNumber || '') : ''; }
+    // legacy deserter files have no file number — say so in words instead of leaving the source blank (no invented number)
+    if (d.sourceModule === 'deserter') { const f = Storage.getById(Storage.KEYS.DESERTER_FILES, d.sourceRecordId); if (f && !f.fileNumber) return { label: 'תיק עריק ישן', rec: '' }; rec = f ? f.fileNumber : ''; }
     if (d.sourceModule === 'prisoner') { const f = Storage.getById(Storage.KEYS.PRISONER_FILES, d.sourceRecordId); rec = f ? (f.fileNumber || '') : ''; }
     return { label, rec };
   }
