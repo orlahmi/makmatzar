@@ -155,6 +155,9 @@ window.Migrations = (function() {
     },
   ];
 
+  // the same hygiene pass is registered again so QA records created after the first pass (final QA of this sprint) are cleaned too
+  list.push({ id: '2026-10-qa-artifact-cleanup-2', run: list.filter(m => m.id === '2026-10-qa-artifact-cleanup')[0].run });
+
   function runAll() {
     list.forEach(m => { if (done().indexOf(m.id) === -1) { try { m.run(); mark(m.id); } catch (e) { console.warn('migration failed', m.id, e); } } });
   }
