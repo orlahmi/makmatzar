@@ -12,7 +12,7 @@ Pages['inmate-activities'] = function(query) {
   let selectedDate = today;
   const canEdit = Permissions.can('editPrisoner');
   // deep links from other modules: ?date=YYYY-MM-DD (and optionally ?permit=<id> to open that permit)
-  if (query && /^d{4}-d{2}-d{2}$/.test(query.date || '')) { selectedDate = query.date; viewDate = new Date(query.date + 'T00:00:00'); }
+  if (query && /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(query.date || '')) { selectedDate = query.date; viewDate = new Date(query.date + 'T00:00:00'); }
 
   let filterCompany = '';
   let filterType = '';
