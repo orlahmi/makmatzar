@@ -777,7 +777,7 @@
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
   color: var(--color-text-muted);
-  min-width: 90px;
+  min-width: 130px;
   flex-shrink: 0;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -1267,3 +1267,10 @@
 .empty-block .empty-title { font-weight: var(--font-weight-semibold); color: var(--color-text-secondary, var(--color-text-primary)); margin-bottom: 4px; }
 .empty-block .empty-hint { font-size: var(--font-size-sm); margin-bottom: 12px; }
 .section-hint { font-size: 12px; color: var(--color-text-muted); margin: -2px 0 10px; line-height: 1.5; }
+
+/* deserter header (person summary) — these classes were used but unstyled */
+.person-summary-details { flex: 1; min-width: 0; }
+.person-summary-kpi { display: flex; gap: var(--space-5, 20px); align-items: stretch; flex-shrink: 0; }
+.kpi-small { text-align: center; min-width: 78px; padding: 6px 12px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface, #fff); }
+.kpi-small-value { font-size: var(--font-size-xl, 20px); font-weight: var(--font-weight-bold); color: var(--color-text-primary); line-height: 1.2; }
+.kpi-small-label { font-size: 11px; color: var(--color-text-muted); margin-top: 2px; white-space: nowrap; }
